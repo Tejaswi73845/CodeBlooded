@@ -5,7 +5,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AuditLog
+from app.dependencies import current_workspace
+from app.models import AuditLog, Workspace
 from app.models.enums import AuditResult
 from app.schemas.audit import AuditEntryOut, AuditPage, AuditVerify
 from app.services.audit_service import verify_chain
@@ -34,8 +35,9 @@ def list_audit(
     q: str | None = Query(default=None, max_length=300),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    workspace: Workspace = Depends(current_workspace),
 ):
-    stmt = select(AuditLog)
+    stmt = select(AuditLog).where(AuditLog.workspace_id == workspace.id)
     if actor:
         stmt = stmt.where(AuditLog.actor == actor)
     if action:

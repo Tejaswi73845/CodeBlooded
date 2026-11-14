@@ -53,8 +53,11 @@ def list_evidence(
     sort: str = "newest",
     limit: int = 20,
     offset: int = 0,
+    workspace_id: uuid.UUID | None = None,
 ) -> tuple[list[EvidenceSummary], int]:
     stmt = select(Evidence).where(Evidence.deleted_at.is_(None))
+    if workspace_id is not None:
+        stmt = stmt.where(Evidence.workspace_id == workspace_id)
     type_value = _file_type(file_type)
     if type_value:
         stmt = stmt.where(Evidence.file_type == type_value)

@@ -1,4 +1,5 @@
 from app.models.audit import AuditLog
+from app.models.auth_session import AuthSession
 from app.models.chunk import DocumentChunk
 from app.models.content import ExtractedContent
 from app.models.entity import Entity, EntityRelationship, EventEntity, EvidenceEntity
@@ -17,10 +18,12 @@ from app.models.evidence import Evidence
 from app.models.report import Report
 from app.models.timeline import TimelineEvent
 from app.models.user import User
+from app.models.workspace import Workspace
 
 __all__ = [
     "AuditLog",
     "AuditResult",
+    "AuthSession",
     "ContentKind",
     "DocumentChunk",
     "Entity",
@@ -39,4 +42,5 @@ __all__ = [
     "ReportStatus",
     "TimelineEvent",
     "User",
+    "Workspace",
 ]

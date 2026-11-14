@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FileTypeTile } from "@/components/evidence/file-type";
 import { PersonAvatar } from "@/components/person-avatar";
-import { workspace } from "@/lib/workspace";
 import { formatDate } from "@/lib/format";
 
 function Inline({ text }: { text: string }) {
@@ -68,7 +67,7 @@ function Answer({ text }: { text: string }) {
 }
 
 export function AssistantPage() {
-  const { messages, thinking, ask, clearChat, evidence, events, openEvidence, people, toast } = useApp();
+  const { messages, thinking, ask, clearChat, evidence, events, openEvidence, people, toast, workspace } = useApp();
   const [draft, setDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

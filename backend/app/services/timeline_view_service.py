@@ -25,12 +25,15 @@ def query_timeline(
     q: str | None = None,
     limit: int = 100,
     offset: int = 0,
+    workspace_id: uuid.UUID | None = None,
 ) -> TimelinePage:
     stmt = (
         select(TimelineEvent)
         .join(Evidence, Evidence.id == TimelineEvent.evidence_id)
         .where(Evidence.deleted_at.is_(None))
     )
+    if workspace_id is not None:
+        stmt = stmt.where(Evidence.workspace_id == workspace_id)
     if from_date:
         stmt = stmt.where(TimelineEvent.occurred_at.is_not(None), TimelineEvent.occurred_at >= from_date)
     if to_date:
@@ -61,16 +64,30 @@ def query_timeline(
         ).all()
     )
     earliest = db.scalar(
-        select(func.min(TimelineEvent.occurred_at)).join(Evidence).where(Evidence.deleted_at.is_(None))
+        select(func.min(TimelineEvent.occurred_at))
+        .join(Evidence)
+        .where(
+            Evidence.deleted_at.is_(None),
+            Evidence.workspace_id == workspace_id if workspace_id is not None else True,
+        )
     )
     latest = db.scalar(
-        select(func.max(TimelineEvent.occurred_at)).join(Evidence).where(Evidence.deleted_at.is_(None))
+        select(func.max(TimelineEvent.occurred_at))
+        .join(Evidence)
+        .where(
+            Evidence.deleted_at.is_(None),
+            Evidence.workspace_id == workspace_id if workspace_id is not None else True,
+        )
     )
     uncertain_count = int(
         db.scalar(
             select(func.count(TimelineEvent.id))
             .join(Evidence)
-            .where(Evidence.deleted_at.is_(None), TimelineEvent.time_uncertain.is_(True))
+            .where(
+                Evidence.deleted_at.is_(None),
+                TimelineEvent.time_uncertain.is_(True),
+                Evidence.workspace_id == workspace_id if workspace_id is not None else True,
+            )
         )
         or 0
     )
@@ -85,10 +102,14 @@ def query_timeline(
     )
 
 
-def get_timeline_event(db: Session, event_id: uuid.UUID) -> TimelineEventOut:
+def get_timeline_event(db: Session, event_id: uuid.UUID, workspace_id: uuid.UUID | None = None) -> TimelineEventOut:
     event = db.get(TimelineEvent, event_id)
     if not event:
         raise NotFoundError("Timeline event", event_id)
+    if workspace_id is not None:
+        evidence = db.get(Evidence, event.evidence_id)
+        if not evidence or evidence.workspace_id != workspace_id:
+            raise NotFoundError("Timeline event", event_id)
     return _serialize_many(db, [event])[0]
 
 

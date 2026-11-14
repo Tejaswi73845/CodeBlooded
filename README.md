@@ -14,6 +14,7 @@ TraceVault is the platform name; the React interface ships under the **Veritas**
 - **Entities & connections** — people, locations, organisations, phones, emails and dates, with a relationship graph built from evidence co-occurrence. Capture details are synced into entities and the timeline.
 - **Timeline** — reconstructed events with raw timestamps, UTC normalisation, uncertainty flags and source locators (page, frame, audio segment).
 - **Grounded assistant** — retrieval-augmented Q&A over preserved evidence with `[S1]`-style citations; deterministic metadata answers for questions like *"what is the latest evidence?"*.
+- **Workspaces** — keep separate investigations isolated. Create, rename or delete workspaces from the sidebar; evidence, entities, timeline, reports and audit entries are scoped to the selected workspace.
 - **Reports** — structured reports with an integrity section, stored server-side and exportable as PDF.
 - **Audit ledger** — append-only, hash-chained log of every upload, view, download, query, edit, report and verification.
 
@@ -108,7 +109,14 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. In development, Vite proxies `/api` to `http://localhost:8000`, so no extra configuration is needed.
+Open <http://localhost:5173>. Sign in with the seeded local account:
+
+```
+aarav.shah@kestrel.legal
+tracevault
+```
+
+You can also create a new account from the sign-in screen. Sign out from the account menu (top right).
 
 > **Restart the dev server** after changing `vite.config.ts`; the proxy is loaded at startup.
 
@@ -217,6 +225,14 @@ Base URL: `http://127.0.0.1:8000/api` — full reference in [backend/README.md](
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/auth/login` | Sign in with email/password → bearer token |
+| POST | `/auth/register` | Create an account → bearer token |
+| POST | `/auth/logout` | Revoke the current session |
+| GET | `/auth/me` | Current user |
+| GET | `/workspaces` | List workspaces with evidence counts |
+| POST | `/workspaces` | Create a workspace |
+| PATCH | `/workspaces/{id}` | Rename a workspace |
+| DELETE | `/workspaces/{id}` | Delete (evidence/reports/audit move to the default workspace) |
 | POST | `/evidence/upload` | Upload files with optional capture metadata |
 | GET | `/evidence` | List/search/filter evidence |
 | GET | `/evidence/{id}` | Detail: extracted content, entities, events, capture, duplicates |
@@ -241,6 +257,10 @@ All responses are camelCase with UTC timestamps (`Z`). Errors share one envelope
 { "error": { "code": "…", "message": "…", "details": {}, "requestId": "…" } }
 ```
 
+**Workspace scoping:** send `X-Workspace-Id: <workspace-uuid>` on every request (the UI does this automatically). Missing or unknown IDs fall back to the default workspace. Evidence, entities, timeline, assistant, reports and audit are all filtered by that workspace.
+
+**Authentication:** the UI signs in via `/auth/login` and sends `Authorization: Bearer <token>` on every request. Sessions are opaque tokens stored hashed in `auth_sessions` and expire after `AUTH_SESSION_DAYS`. `AUTH_REQUIRED=true` enforces auth on the API; the default (`false`) keeps Swagger usable for local testing. The seeded account is `aarav.shah@kestrel.legal` / `DEFAULT_PASSWORD` (`tracevault`).
+
 ---
 
 ## Configuration (backend `.env`)
@@ -252,6 +272,9 @@ All responses are camelCase with UTC timestamps (`Z`). Errors share one envelope
 | `UPLOAD_DIR` | `./uploads` | Originals, derived artifacts, temp |
 | `MAX_UPLOAD_MB` | `2048` | Enforced while streaming |
 | `CORS_ORIGINS` | localhost:5173/4173 | Any localhost port is also allowed |
+| `AUTH_REQUIRED` | `false` | Enforce bearer-token auth on the API |
+| `AUTH_SESSION_DAYS` | `7` | Session lifetime |
+| `DEFAULT_PASSWORD` | `tracevault` | Password for the seeded analyst account |
 | `AI_PROVIDER` | `google` | `google` or `opencode` |
 | `GEMINI_API_KEY` | empty | Chat (google) **and** embeddings |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Google chat model |
@@ -289,7 +312,7 @@ The backend suite exercises upload → hash → extraction → chunking → enti
 
 ## Security & limitations
 
-- **No authentication or RBAC yet.** Do not expose the API publicly without adding auth.
+- **Authentication exists but is opt-in.** The UI signs in with bearer tokens (`auth_sessions`); set `AUTH_REQUIRED=true` to enforce auth on every API route. Without it, the API trusts local callers.
 - Originals are immutable and read-only; deletion is a soft delete that retains the original for custody.
 - The audit chain assumes a single API worker; scale with a dedicated ledger writer.
 - OCR/ASR is CPU-bound. HD images and video can take tens of seconds; tune frame interval and model size for demos.

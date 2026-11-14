@@ -19,8 +19,12 @@ from app.utils.time import utcnow
 logger = get_logger(__name__)
 
 
-def generate_report(db: Session, request: ReportGenerateRequest, actor: str) -> Report:
+def generate_report(
+    db: Session, request: ReportGenerateRequest, actor: str, workspace_id: uuid.UUID | None = None
+) -> Report:
     stmt = select(Evidence).where(Evidence.deleted_at.is_(None))
+    if workspace_id is not None:
+        stmt = stmt.where(Evidence.workspace_id == workspace_id)
     if request.evidence_ids:
         stmt = stmt.where(Evidence.id.in_(request.evidence_ids))
     evidence_rows = list(db.scalars(stmt.order_by(Evidence.uploaded_at.asc())).all())
@@ -164,6 +168,7 @@ def generate_report(db: Session, request: ReportGenerateRequest, actor: str) -> 
         author=actor,
         generated_by=generated_by,
         model=model,
+        workspace_id=workspace_id,
     )
     db.add(report)
     db.commit()
@@ -171,15 +176,22 @@ def generate_report(db: Session, request: ReportGenerateRequest, actor: str) -> 
     return report
 
 
-def list_reports(db: Session, limit: int = 20, offset: int = 0) -> tuple[list[ReportSummary], int]:
-    total = int(db.scalar(select(func.count(Report.id))) or 0)
-    rows = db.scalars(select(Report).order_by(Report.created_at.desc()).limit(limit).offset(offset)).all()
+def list_reports(
+    db: Session, limit: int = 20, offset: int = 0, workspace_id: uuid.UUID | None = None
+) -> tuple[list[ReportSummary], int]:
+    stmt = select(Report)
+    if workspace_id is not None:
+        stmt = stmt.where(Report.workspace_id == workspace_id)
+    total = int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+    rows = db.scalars(stmt.order_by(Report.created_at.desc()).limit(limit).offset(offset)).all()
     return [serialize_report_summary(row) for row in rows], total
 
 
-def get_report(db: Session, report_id: uuid.UUID) -> Report:
+def get_report(db: Session, report_id: uuid.UUID, workspace_id: uuid.UUID | None = None) -> Report:
     report = db.get(Report, report_id)
     if not report:
+        raise NotFoundError("Report", report_id)
+    if workspace_id is not None and report.workspace_id != workspace_id:
         raise NotFoundError("Report", report_id)
     return report
 

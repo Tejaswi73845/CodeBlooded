@@ -4,7 +4,6 @@ import { CommandPalette } from "@/components/layout/command-palette";
 import { EvidenceDrawer } from "@/components/evidence/evidence-drawer";
 import { ToastViewport } from "@/components/ui/toast";
 import { useApp } from "@/store/app-store";
-import { workspace } from "@/lib/workspace";
 import { DashboardPage } from "@/pages/dashboard";
 import { VaultPage } from "@/pages/vault";
 import { TimelinePage } from "@/pages/timeline";
@@ -13,9 +12,27 @@ import { AssistantPage } from "@/pages/assistant";
 import { ReportsPage } from "@/pages/reports";
 import { AuditPage } from "@/pages/audit";
 import { SettingsPage } from "@/pages/settings";
+import { AuthPage } from "@/pages/auth";
 
 export default function App() {
-  const { view } = useApp();
+  const { view, workspace, user, authReady } = useApp();
+
+  if (!authReady) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-bg text-[12px] text-ink-3">
+        Loading workspace…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <AuthPage />
+        <ToastViewport />
+      </>
+    );
+  }
 
   const page = {
     overview: <DashboardPage />,
@@ -37,7 +54,7 @@ export default function App() {
           <div key={view}>{page}</div>
         </main>
         <footer className="mx-auto hidden w-full max-w-[1440px] items-center justify-between gap-4 px-4 pb-4 text-[10px] text-ink-3 sm:px-6 lg:flex lg:px-8 print:hidden">
-          <span>Veritas Evidence Intelligence · Workspace Kestrel Legal</span>
+          <span>Veritas Evidence Intelligence · {workspace.name}</span>
           <span className="inline-flex items-center gap-3">
             <span>Case {workspace.caseId}</span>
             <span className="h-2.5 w-px bg-line" />

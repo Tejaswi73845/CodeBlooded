@@ -53,6 +53,7 @@ def verify_evidence_integrity(
         details={"sha256": evidence.sha256, "status": status.value, "detail": detail},
         ip_address=ip_address,
         user_agent=user_agent,
+        workspace_id=evidence.workspace_id,
     )
     logger.info("Integrity %s for evidence %s", status.value, evidence.id)
     return status

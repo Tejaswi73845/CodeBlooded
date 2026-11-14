@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     default_actor: str = "Aarav Shah"
     default_actor_email: str = "aarav.shah@kestrel.legal"
 
+    # Authentication (frontend sign-in). Enforcement is opt-in so local Swagger
+    # keeps working; set AUTH_REQUIRED=true to protect the API.
+    auth_required: bool = False
+    auth_session_days: int = 7
+    default_password: str = "tracevault"
+
     # Gemini (never hardcode a key; leave empty to use deterministic fallbacks)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"

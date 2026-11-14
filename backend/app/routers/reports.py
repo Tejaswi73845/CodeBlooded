@@ -7,6 +7,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import current_workspace
+from app.models import Workspace
 from app.schemas.report import ReportGenerateRequest, ReportOut, ReportPage
 from app.services import report_service
 from app.services.audit_service import record_audit
@@ -17,9 +19,14 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
 @router.post("/generate", response_model=ReportOut, status_code=status.HTTP_201_CREATED)
-def generate_report(payload: ReportGenerateRequest, request: Request, db: Session = Depends(get_db)):
+def generate_report(
+    payload: ReportGenerateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
     actor = payload.actor or actor_name(request)
-    report = report_service.generate_report(db, payload, actor)
+    report = report_service.generate_report(db, payload, actor, workspace_id=workspace.id)
     record_audit(
         db,
         actor=actor,
@@ -34,6 +41,7 @@ def generate_report(payload: ReportGenerateRequest, request: Request, db: Sessio
         },
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     return report_service.serialize_report(report)
 
@@ -43,19 +51,29 @@ def list_reports(
     db: Session = Depends(get_db),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    workspace: Workspace = Depends(current_workspace),
 ):
-    items, total = report_service.list_reports(db, limit=limit, offset=offset)
+    items, total = report_service.list_reports(db, limit=limit, offset=offset, workspace_id=workspace.id)
     return ReportPage(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{report_id}", response_model=ReportOut)
-def get_report(report_id: uuid.UUID, db: Session = Depends(get_db)):
-    return report_service.serialize_report(report_service.get_report(db, report_id))
+def get_report(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    return report_service.serialize_report(report_service.get_report(db, report_id, workspace.id))
 
 
 @router.get("/{report_id}/pdf")
-def download_report_pdf(report_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    report = report_service.get_report(db, report_id)
+def download_report_pdf(
+    report_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    report = report_service.get_report(db, report_id, workspace.id)
     buffer = report_service.render_report_pdf(report)
     record_audit(
         db,
@@ -66,6 +84,7 @@ def download_report_pdf(report_id: uuid.UUID, request: Request, db: Session = De
         details={"title": report.title, "format": "pdf"},
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     filename = f"{slugify(report.title)}.pdf"
     return StreamingResponse(

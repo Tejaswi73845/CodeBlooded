@@ -41,12 +41,15 @@ def _parse_types(types: str | None) -> list[EntityType]:
     return values or AUTO_GRAPH_TYPES
 
 
-def _active_entity_ids():
-    return (
+def _active_entity_ids(workspace_id=None):
+    stmt = (
         select(EvidenceEntity.entity_id)
         .join(Evidence, Evidence.id == EvidenceEntity.evidence_id)
         .where(Evidence.deleted_at.is_(None))
     )
+    if workspace_id is not None:
+        stmt = stmt.where(Evidence.workspace_id == workspace_id)
+    return stmt
 
 
 def list_entities(
@@ -57,8 +60,9 @@ def list_entities(
     evidence_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
+    workspace_id=None,
 ) -> tuple[list[EntitySummary], int]:
-    stmt = select(Entity).where(Entity.id.in_(_active_entity_ids()))
+    stmt = select(Entity).where(Entity.id.in_(_active_entity_ids(workspace_id)))
     if type_filter:
         stmt = stmt.where(Entity.type.in_(_parse_types(type_filter)))
     if q and q.strip():
@@ -72,18 +76,21 @@ def list_entities(
     rows = list(
         db.scalars(stmt.order_by(Entity.mention_count.desc(), Entity.value).limit(limit).offset(offset)).all()
     )
-    return _serialize_many(db, rows), total
+    return _serialize_many(db, rows, workspace_id), total
 
 
-def _serialize_many(db: Session, rows: list[Entity]) -> list[EntitySummary]:
+def _serialize_many(db: Session, rows: list[Entity], workspace_id=None) -> list[EntitySummary]:
     if not rows:
         return []
     ids = [row.id for row in rows]
-    links = db.execute(
+    link_stmt = (
         select(EvidenceEntity.entity_id, EvidenceEntity.evidence_id, EvidenceEntity.occurrence_count)
         .join(Evidence, Evidence.id == EvidenceEntity.evidence_id)
         .where(EvidenceEntity.entity_id.in_(ids), Evidence.deleted_at.is_(None))
-    ).all()
+    )
+    if workspace_id is not None:
+        link_stmt = link_stmt.where(Evidence.workspace_id == workspace_id)
+    links = db.execute(link_stmt).all()
     by_entity: dict[uuid.UUID, list[uuid.UUID]] = {}
     mentions: dict[uuid.UUID, int] = {}
     for entity_id, evidence_id, occurrences in links:
@@ -108,26 +115,32 @@ def _serialize_many(db: Session, rows: list[Entity]) -> list[EntitySummary]:
     ]
 
 
-def get_entity_detail(db: Session, entity_id: uuid.UUID) -> EntityDetail:
+def get_entity_detail(db: Session, entity_id: uuid.UUID, workspace_id=None) -> EntityDetail:
     entity = db.get(Entity, entity_id)
     if not entity:
         raise NotFoundError("Entity", entity_id)
-    active_links = db.scalar(
+    active_stmt = (
         select(func.count())
         .select_from(EvidenceEntity)
         .join(Evidence, Evidence.id == EvidenceEntity.evidence_id)
         .where(EvidenceEntity.entity_id == entity_id, Evidence.deleted_at.is_(None))
     )
+    if workspace_id is not None:
+        active_stmt = active_stmt.where(Evidence.workspace_id == workspace_id)
+    active_links = db.scalar(active_stmt)
     if not active_links:
         raise NotFoundError("Entity", entity_id)
-    base = _serialize_many(db, [entity])[0]
+    base = _serialize_many(db, [entity], workspace_id)[0]
 
-    links = db.execute(
+    links_stmt = (
         select(EvidenceEntity, Evidence)
         .join(Evidence, Evidence.id == EvidenceEntity.evidence_id)
         .where(EvidenceEntity.entity_id == entity_id, Evidence.deleted_at.is_(None))
         .order_by(Evidence.uploaded_at.desc())
-    ).all()
+    )
+    if workspace_id is not None:
+        links_stmt = links_stmt.where(Evidence.workspace_id == workspace_id)
+    links = db.execute(links_stmt).all()
     evidence_refs: list[EntityEvidenceRef] = []
     evidence_ids: list[uuid.UUID] = []
     for link, evidence in links:
@@ -144,7 +157,7 @@ def get_entity_detail(db: Session, entity_id: uuid.UUID) -> EntityDetail:
             )
         )
 
-    relationships = db.scalars(
+    relationships_stmt = (
         select(EntityRelationship)
         .join(Evidence, Evidence.id == EntityRelationship.evidence_id)
         .where(
@@ -152,7 +165,10 @@ def get_entity_detail(db: Session, entity_id: uuid.UUID) -> EntityDetail:
             Evidence.deleted_at.is_(None),
         )
         .limit(100)
-    ).all()
+    )
+    if workspace_id is not None:
+        relationships_stmt = relationships_stmt.where(Evidence.workspace_id == workspace_id)
+    relationships = db.scalars(relationships_stmt).all()
     related: list[RelatedEntity] = []
     seen: set[str] = set()
     for relation in relationships:
@@ -213,9 +229,10 @@ def build_graph(
     q: str | None = None,
     include_events: bool = True,
     limit: int = 150,
+    workspace_id=None,
 ) -> EntityGraph:
     type_values = _parse_types(types)
-    stmt = select(Entity).where(Entity.type.in_(type_values), Entity.id.in_(_active_entity_ids()))
+    stmt = select(Entity).where(Entity.type.in_(type_values), Entity.id.in_(_active_entity_ids(workspace_id)))
     if q and q.strip():
         needle = f"%{q.strip()}%"
         stmt = stmt.where(or_(Entity.value.ilike(needle), Entity.normalized_value.ilike(needle)))
@@ -227,11 +244,14 @@ def build_graph(
         for entity_id in entity_ids
     }
     if entity_ids:
-        for entity_id, evidence_id in db.execute(
+        links_stmt = (
             select(EvidenceEntity.entity_id, EvidenceEntity.evidence_id)
             .join(Evidence, Evidence.id == EvidenceEntity.evidence_id)
             .where(EvidenceEntity.entity_id.in_(entity_ids), Evidence.deleted_at.is_(None))
-        ).all():
+        )
+        if workspace_id is not None:
+            links_stmt = links_stmt.where(Evidence.workspace_id == workspace_id)
+        for entity_id, evidence_id in db.execute(links_stmt).all():
             linked_evidence.setdefault(entity_id, set()).add(evidence_id)
 
     nodes = [
@@ -250,7 +270,7 @@ def build_graph(
 
     edges: list[GraphEdge] = []
     if entity_ids:
-        relationships = db.scalars(
+        relationship_stmt = (
             select(EntityRelationship)
             .join(Evidence, Evidence.id == EntityRelationship.evidence_id)
             .where(
@@ -259,7 +279,10 @@ def build_graph(
                 Evidence.deleted_at.is_(None),
             )
             .limit(400)
-        ).all()
+        )
+        if workspace_id is not None:
+            relationship_stmt = relationship_stmt.where(Evidence.workspace_id == workspace_id)
+        relationships = db.scalars(relationship_stmt).all()
         for relation in relationships:
             edges.append(
                 GraphEdge(
@@ -275,14 +298,17 @@ def build_graph(
             )
 
     if include_events and entity_ids:
-        event_rows = db.execute(
+        event_stmt = (
             select(TimelineEvent, EventEntity.entity_id)
             .join(EventEntity, EventEntity.event_id == TimelineEvent.id)
             .join(Evidence, Evidence.id == TimelineEvent.evidence_id)
             .where(EventEntity.entity_id.in_(entity_ids), Evidence.deleted_at.is_(None))
             .order_by(TimelineEvent.occurred_at.is_(None), TimelineEvent.occurred_at)
             .limit(80)
-        ).all()
+        )
+        if workspace_id is not None:
+            event_stmt = event_stmt.where(Evidence.workspace_id == workspace_id)
+        event_rows = db.execute(event_stmt).all()
         added_events: set[uuid.UUID] = set()
         for event, entity_id in event_rows:
             node_id = f"event:{event.id}"

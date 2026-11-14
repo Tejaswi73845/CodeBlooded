@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.dependencies import current_workspace
+from app.models import Evidence, Workspace
 from app.schemas.assistant import ChatRequest, ChatResponse, ReindexRequest, ReindexResponse
 from app.services import rag_service
 from app.services.assistant_service import answer_question
@@ -16,12 +19,18 @@ router = APIRouter(prefix="/assistant", tags=["Assistant"])
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest, request: Request, db: Session = Depends(get_db)):
+def chat(
+    payload: ChatRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
     response = answer_question(
         db,
         question=payload.question,
         evidence_ids=payload.evidence_ids,
         limit=payload.limit,
+        workspace_id=workspace.id,
     )
     record_audit(
         db,
@@ -38,14 +47,29 @@ def chat(payload: ChatRequest, request: Request, db: Session = Depends(get_db)):
         },
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     return response
 
 
 @router.post("/reindex", response_model=ReindexResponse)
-def reindex(request: Request, payload: ReindexRequest | None = None, db: Session = Depends(get_db)):
+def reindex(
+    request: Request,
+    payload: ReindexRequest | None = None,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
     """Backfill chunking + embeddings for existing evidence (e.g. after enabling Gemini)."""
     evidence_ids = payload.evidence_ids if payload else []
+    if not evidence_ids:
+        evidence_ids = list(
+            db.scalars(
+                select(Evidence.id).where(
+                    Evidence.deleted_at.is_(None),
+                    Evidence.workspace_id == workspace.id,
+                )
+            ).all()
+        )
     stats = rag_service.reindex(db, evidence_ids or None)
     record_audit(
         db,
@@ -63,6 +87,7 @@ def reindex(request: Request, payload: ReindexRequest | None = None, db: Session
         },
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     return ReindexResponse(
         evidence_indexed=stats.evidence,

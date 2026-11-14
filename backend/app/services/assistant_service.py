@@ -55,12 +55,15 @@ def answer_question(
     question: str,
     evidence_ids: list[uuid.UUID] | None = None,
     limit: int = 8,
+    workspace_id: uuid.UUID | None = None,
 ) -> ChatResponse:
     limit = max(1, min(limit, settings.assistant_max_sources))
     tokens = tokenize(question)
     is_summary = any(phrase in question.lower() for phrase in SUMMARY_INTENT) or not tokens
 
     base = select(Evidence).where(Evidence.deleted_at.is_(None))
+    if workspace_id is not None:
+        base = base.where(Evidence.workspace_id == workspace_id)
     if evidence_ids:
         base = base.where(Evidence.id.in_(evidence_ids))
     evidence_rows = list(db.scalars(base).all())

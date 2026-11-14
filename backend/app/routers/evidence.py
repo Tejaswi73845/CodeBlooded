@@ -10,8 +10,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.errors import AppError
-from app.models import Evidence
+from app.dependencies import current_workspace
+from app.errors import AppError, NotFoundError
+from app.models import Evidence, Workspace
 from app.models.enums import AuditResult, EvidenceStatus, ProcessingStage
 from app.schemas.evidence import (
     CaptureUpdate,
@@ -35,15 +36,22 @@ router = APIRouter(prefix="/evidence", tags=["Evidence"])
 logger = get_logger(__name__)
 
 
-def _counts(db: Session) -> dict[str, int]:
+def _counts(db: Session, workspace_id) -> dict[str, int]:
     rows = db.execute(
         select(Evidence.status, func.count(Evidence.id))
-        .where(Evidence.deleted_at.is_(None))
+        .where(Evidence.deleted_at.is_(None), Evidence.workspace_id == workspace_id)
         .group_by(Evidence.status)
     ).all()
     counts = {value.value: 0 for value in EvidenceStatus}
     counts.update({status_value.value: int(total) for status_value, total in rows})
     return counts
+
+
+def _scoped_evidence(db: Session, evidence_id: uuid.UUID, workspace: Workspace) -> Evidence:
+    evidence = file_service.get_active_evidence(db, evidence_id)
+    if evidence.workspace_id != workspace.id:
+        raise NotFoundError("Evidence", evidence_id)
+    return evidence
 
 
 def _capture_metadata(
@@ -96,6 +104,7 @@ async def upload_evidence(
     note: str | None = Form(default=None, max_length=2000),
     auto_detect: str | None = Form(default=None, alias="autoDetect", max_length=16),
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ):
     uploads = [*files]
     if file is not None:
@@ -123,7 +132,7 @@ async def upload_evidence(
         filename = upload.filename or "evidence"
         try:
             stored = await file_service.store_upload(
-                db, upload, user, capture=capture, auto_detect=detect_missing
+                db, upload, user, capture=capture, auto_detect=detect_missing, workspace_id=workspace.id
             )
         except AppError as exc:
             errors.append(UploadError(filename=filename, error=exc.message))
@@ -136,6 +145,7 @@ async def upload_evidence(
                 details={"filename": filename, "error": exc.message},
                 ip_address=client_ip(request),
                 user_agent=user_agent(request),
+                workspace_id=workspace.id,
             )
             continue
         except Exception:  # noqa: BLE001 - per-file isolation
@@ -175,6 +185,7 @@ def list_evidence(
     sort: str = Query(default="newest", pattern="^(newest|oldest|name|size)$"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    workspace: Workspace = Depends(current_workspace),
 ):
     items, total = evidence_service.list_evidence(
         db,
@@ -186,13 +197,19 @@ def list_evidence(
         sort=sort,
         limit=limit,
         offset=offset,
+        workspace_id=workspace.id,
     )
-    return EvidencePage(items=items, total=total, limit=limit, offset=offset, counts=_counts(db))
+    return EvidencePage(items=items, total=total, limit=limit, offset=offset, counts=_counts(db, workspace.id))
 
 
 @router.get("/{evidence_id}", response_model=EvidenceDetail)
-def get_evidence(evidence_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    evidence = file_service.get_active_evidence(db, evidence_id)
+def get_evidence(
+    evidence_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     detail = evidence_service.get_detail(db, evidence)
     record_audit(
         db,
@@ -203,13 +220,18 @@ def get_evidence(evidence_id: uuid.UUID, request: Request, db: Session = Depends
         details={"filename": evidence.original_filename, "reference": evidence.reference},
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     return detail
 
 
 @router.get("/{evidence_id}/status", response_model=StatusResponse)
-def get_status(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
-    evidence = file_service.get_active_evidence(db, evidence_id)
+def get_status(
+    evidence_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     return StatusResponse(
         id=evidence.id,
         status=evidence.status.value,
@@ -224,8 +246,13 @@ def get_status(evidence_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{evidence_id}/download")
-def download_evidence(evidence_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    evidence = file_service.get_active_evidence(db, evidence_id)
+def download_evidence(
+    evidence_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     path = file_service.resolve_original(evidence)
     record_audit(
         db,
@@ -236,6 +263,7 @@ def download_evidence(evidence_id: uuid.UUID, request: Request, db: Session = De
         details={"filename": evidence.original_filename, "sha256": evidence.sha256},
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     return FileResponse(
         path,
@@ -246,8 +274,13 @@ def download_evidence(evidence_id: uuid.UUID, request: Request, db: Session = De
 
 
 @router.post("/{evidence_id}/verify")
-def verify_evidence(evidence_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    evidence = file_service.get_active_evidence(db, evidence_id)
+def verify_evidence(
+    evidence_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     integrity = verify_evidence_integrity(
         db,
         evidence,
@@ -269,8 +302,9 @@ def reprocess_evidence(
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ):
-    evidence = file_service.get_active_evidence(db, evidence_id)
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     if evidence.status == EvidenceStatus.PROCESSING:
         raise AppError(409, "already_processing", "This item is already being processed.")
     evidence.status = EvidenceStatus.PENDING
@@ -288,14 +322,20 @@ def reprocess_evidence(
         details={"filename": evidence.original_filename},
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     background_tasks.add_task(process_evidence, str(evidence.id))
     return {"id": str(evidence.id), "status": "pending"}
 
 
 @router.delete("/{evidence_id}")
-def delete_evidence(evidence_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    evidence = file_service.get_active_evidence(db, evidence_id)
+def delete_evidence(
+    evidence_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     file_service.soft_delete(db, evidence, actor=actor_name(request), ip=client_ip(request))
     return {"id": str(evidence_id), "deleted": True, "originalRetained": True}
 
@@ -306,9 +346,10 @@ def update_capture(
     payload: CaptureUpdate,
     request: Request,
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ):
     """Correct the analyst/auto-detected capture details and re-sync entities and timeline."""
-    evidence = file_service.get_active_evidence(db, evidence_id)
+    evidence = _scoped_evidence(db, evidence_id, workspace)
     capture = _capture_metadata(
         captured_date=payload.date,
         captured_time=payload.time,
@@ -335,5 +376,6 @@ def update_capture(
         },
         ip_address=client_ip(request),
         user_agent=user_agent(request),
+        workspace_id=workspace.id,
     )
     return evidence_service.serialize_evidence(db, evidence)

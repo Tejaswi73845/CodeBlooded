@@ -29,6 +29,9 @@ class Report(Base):
     generated_by: Mapped[str] = mapped_column(String(40), default="deterministic")
     model: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
     created_by = relationship("User")

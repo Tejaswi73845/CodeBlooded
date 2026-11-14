@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "@/store/app-store";
-import { workspace } from "@/lib/workspace";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +25,7 @@ import { Segmented, Switch } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 export function SettingsPage() {
-  const { theme, toggleTheme, toast, navigate } = useApp();
+  const { theme, toggleTheme, toast, navigate, workspace } = useApp();
   const [name, setName] = useState(workspace.analyst);
   const [email, setEmail] = useState("aarav.shah@kestrel.legal");
   const [defaultView, setDefaultView] = useState("overview");

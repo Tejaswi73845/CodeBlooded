@@ -12,7 +12,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/store/app-store";
 import { api, type BackendReport } from "@/lib/api";
-import { workspace } from "@/lib/workspace";
 import type { ReportRecord } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -56,7 +55,7 @@ function toReportRecord(report: BackendReport): ReportRecord {
 }
 
 export function ReportsPage() {
-  const { evidence, events, insights, toast, openEvidence, people } = useApp();
+  const { evidence, events, insights, toast, openEvidence, people, workspace, activeWorkspaceId } = useApp();
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     summary: true,
     findings: true,
@@ -86,7 +85,7 @@ export function ReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeWorkspaceId]);
 
   const active = reports.find((report) => report.id === activeReport) ?? reports[0] ?? null;
 

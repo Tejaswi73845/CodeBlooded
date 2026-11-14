@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import current_workspace
+from app.models import Workspace
 from app.schemas.timeline import TimelineEventOut, TimelinePage
 from app.services import timeline_view_service
 from app.utils.http import optional_uuid, parse_iso_date
@@ -28,6 +30,7 @@ def get_timeline(
     q: str | None = Query(default=None, max_length=300),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    workspace: Workspace = Depends(current_workspace),
 ):
     return timeline_view_service.query_timeline(
         db,
@@ -40,9 +43,14 @@ def get_timeline(
         q=q,
         limit=limit,
         offset=offset,
+        workspace_id=workspace.id,
     )
 
 
 @router.get("/{event_id}", response_model=TimelineEventOut)
-def get_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
-    return timeline_view_service.get_timeline_event(db, event_id)
+def get_event(
+    event_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    return timeline_view_service.get_timeline_event(db, event_id, workspace.id)

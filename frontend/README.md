@@ -4,6 +4,8 @@ React 19 + TypeScript interface for TraceVault. It is fully wired to the FastAPI
 
 Screens: Dashboard · Evidence Vault · Timeline · People & Connections · AI Assistant · Reports · Audit · Settings.
 
+**Workspaces:** the sidebar switcher lists workspaces and lets you create, rename or delete them. Every screen is scoped to the selected workspace (the client sends `X-Workspace-Id`); switching clears and reloads evidence, people, timeline, reports, audit and chat. Deleting a workspace moves its data to the default workspace.
+
 ## Prerequisites
 
 Start the backend first (see [`../backend/README.md`](../backend/README.md)):
@@ -22,6 +24,8 @@ npm run dev
 ```
 
 Open <http://localhost:5173>. Light theme is default; toggle dark from the topbar.
+
+**Sign in** with the seeded account (`aarav.shah@kestrel.legal` / `tracevault`) or create a new one on the same screen. The session token is stored in `localStorage` and sent as `Authorization: Bearer …`; **Sign out** in the account menu revokes it server-side.
 
 ### Backend connection
 

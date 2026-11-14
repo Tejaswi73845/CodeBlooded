@@ -10,12 +10,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import update
 
 from app.config import settings
-from app.database import SessionLocal, init_db
+from app.database import SessionLocal, ensure_auth_schema, ensure_workspace_schema, init_db
 from app.errors import AppError
+from app.middleware.auth_context import AuthContextMiddleware
 from app.middleware.request_context import RequestContextMiddleware
 from app.models import Evidence
 from app.models.enums import EvidenceStatus, ProcessingStage
-from app.routers import assistant, audit, entities, evidence, health, reports, timeline
+from app.routers import assistant, audit, auth, entities, evidence, health, reports, timeline, workspaces
+from app.services import auth_service
 from app.services.ai_service import ai_service
 from app.services.audio_service import ensure_ffmpeg_on_path
 from app.services.audit_service import record_audit
@@ -55,6 +57,14 @@ def _recover_interrupted_jobs() -> None:
         db.close()
 
 
+def _ensure_default_credentials() -> None:
+    db = SessionLocal()
+    try:
+        auth_service.ensure_default_credentials(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
@@ -65,7 +75,10 @@ async def lifespan(app: FastAPI):
     (settings.upload_root / "tmp").mkdir(exist_ok=True)
     if settings.auto_create_tables:
         init_db()
+    ensure_workspace_schema()
+    ensure_auth_schema()
     _recover_interrupted_jobs()
+    _ensure_default_credentials()
     logger.info("TraceVault %s starting (%s)", settings.app_version, settings.environment)
     logger.info("Uploads: %s", settings.upload_root)
     logger.info("Database: %s", settings.database_url.split("@")[-1])
@@ -104,6 +117,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(AuthContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -177,6 +191,8 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=str(forwarded), status_code=307)
 
     app.include_router(health.router, prefix=settings.api_prefix)
+    app.include_router(auth.router, prefix=settings.api_prefix)
+    app.include_router(workspaces.router, prefix=settings.api_prefix)
     app.include_router(evidence.router, prefix=settings.api_prefix)
     app.include_router(timeline.router, prefix=settings.api_prefix)
     app.include_router(entities.router, prefix=settings.api_prefix)

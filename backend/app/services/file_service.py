@@ -70,6 +70,7 @@ async def store_upload(
     *,
     capture: dict[str, Any] | None = None,
     auto_detect: bool = False,
+    workspace_id=None,
 ) -> StoredUpload:
     original_name = upload.filename or "evidence"
     clean_name = safe_filename(original_name)
@@ -102,7 +103,13 @@ async def store_upload(
 
         sha256 = digest.hexdigest()
         exact = db.scalar(
-            select(Evidence).where(Evidence.sha256 == sha256, Evidence.deleted_at.is_(None)).limit(1)
+            select(Evidence)
+            .where(
+                Evidence.sha256 == sha256,
+                Evidence.deleted_at.is_(None),
+                Evidence.workspace_id == workspace_id if workspace_id is not None else True,
+            )
+            .limit(1)
         )
         duplicates: list[DuplicateHit] = []
         if exact:
@@ -110,9 +117,10 @@ async def store_upload(
 
         phash = image_phash(tmp_path) if file_type.value == "image" else None
         if phash:
-            candidates = db.scalars(
-                select(Evidence).where(Evidence.phash.is_not(None), Evidence.deleted_at.is_(None))
-            ).all()
+            candidate_stmt = select(Evidence).where(Evidence.phash.is_not(None), Evidence.deleted_at.is_(None))
+            if workspace_id is not None:
+                candidate_stmt = candidate_stmt.where(Evidence.workspace_id == workspace_id)
+            candidates = db.scalars(candidate_stmt).all()
             for candidate in candidates:
                 if exact and candidate.id == exact.id:
                     continue
@@ -170,6 +178,7 @@ async def store_upload(
             integrity_status=IntegrityStatus.PENDING,
             duplicate_of_id=exact.id if exact else None,
             uploaded_by_id=user.id,
+            workspace_id=workspace_id,
             note=capture_data.get("note") or "Queued for extraction.",
             meta=meta,
             uploaded_at=utcnow(),
@@ -196,6 +205,7 @@ async def store_upload(
                 "duplicateOf": str(exact.id) if exact else None,
                 "similarTo": [str(d.evidence.id) for d in duplicates if d.kind == "perceptual"],
             },
+            workspace_id=workspace_id,
         )
         return StoredUpload(evidence=evidence, duplicates=duplicates)
     except Exception:
@@ -232,4 +242,5 @@ def soft_delete(db: Session, evidence: Evidence, actor: str, ip: str | None = No
         target_id=str(evidence.id),
         details={"filename": evidence.original_filename, "retainedOriginal": True},
         ip_address=ip,
+        workspace_id=evidence.workspace_id,
     )

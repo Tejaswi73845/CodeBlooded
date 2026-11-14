@@ -106,6 +106,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** True when the id is a backend evidence UUID (seed/local ids are UI-only). */
 export const isBackendEvidenceId = (id: string): boolean => UUID_RE.test(id);
 
+let activeWorkspaceId: string | null = null;
+let authToken: string | null = null;
+
+/** Select the workspace sent as X-Workspace-Id on every request. */
+export function setActiveWorkspace(id: string | null): void {
+  activeWorkspaceId = id;
+}
+
+/** Set (or clear) the bearer token sent on every request. */
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (activeWorkspaceId) headers.set("X-Workspace-Id", activeWorkspaceId);
+  if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
+  return fetch(`${API_BASE}${path}`, { ...init, headers });
+}
+
 export interface ChatSource {
   evidenceId: string;
   evidenceName: string;
@@ -183,10 +203,99 @@ export interface BackendReport {
   generatedBy?: string;
 }
 
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  evidenceCount: number;
+  createdAt: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}
+
+export interface AuthResult {
+  token: string;
+  user: AuthUser;
+}
+
 export const api = {
+  async login(email: string, password: string): Promise<AuthResult> {
+    const response = await request("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Sign-in failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as AuthResult;
+  },
+  async register(name: string, email: string, password: string): Promise<AuthResult> {
+    const response = await request("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Could not create account (HTTP ${response.status})`);
+    }
+    return (await response.json()) as AuthResult;
+  },
+  async me(): Promise<AuthUser> {
+    const response = await request("/api/auth/me");
+    if (!response.ok) throw new Error(`Session expired (HTTP ${response.status})`);
+    return (await response.json()) as AuthUser;
+  },
+  async logout(): Promise<void> {
+    await request("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+  },
+  /** List workspaces with evidence counts. */
+  async workspaces(): Promise<WorkspaceInfo[]> {
+    const response = await request("/api/workspaces");
+    if (!response.ok) throw new Error(`Workspaces request failed (HTTP ${response.status})`);
+    return ((await response.json()) as { items?: WorkspaceInfo[] }).items ?? [];
+  },
+  async createWorkspace(name: string): Promise<WorkspaceInfo> {
+    const response = await request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Could not create workspace (HTTP ${response.status})`);
+    }
+    return (await response.json()) as WorkspaceInfo;
+  },
+  async renameWorkspace(id: string, name: string): Promise<WorkspaceInfo> {
+    const response = await request(`/api/workspaces/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Could not rename workspace (HTTP ${response.status})`);
+    }
+    return (await response.json()) as WorkspaceInfo;
+  },
+  async deleteWorkspace(id: string): Promise<void> {
+    const response = await request(`/api/workspaces/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Could not delete workspace (HTTP ${response.status})`);
+    }
+  },
   async listEvidence(): Promise<EvidenceItem[]> {
     try {
-      const response = await fetch(`${API_BASE}/api/evidence?limit=100`);
+      const response = await request(`/api/evidence?limit=100`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = (await response.json()) as { items?: BackendEvidence[] };
       return (payload.items ?? []).map(toEvidenceItem);
@@ -205,7 +314,7 @@ export const api = {
     if (meta?.persons?.length) form.append("persons", JSON.stringify(meta.persons));
     if (meta?.note) form.append("note", meta.note);
     if (meta?.autoDetect !== undefined) form.append("autoDetect", meta.autoDetect ? "true" : "false");
-    const response = await fetch(`${API_BASE}/api/evidence/upload`, { method: "POST", body: form });
+    const response = await request(`/api/evidence/upload`, { method: "POST", body: form });
     if (!response.ok) {
       const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
       throw new Error(payload?.error?.message ?? `Upload failed (HTTP ${response.status})`);
@@ -217,25 +326,25 @@ export const api = {
   },
   /** Fetch one evidence item (to pick up auto-detected capture details). */
   async evidence(id: string): Promise<EvidenceItem> {
-    const response = await fetch(`${API_BASE}/api/evidence/${id}`);
+    const response = await request(`/api/evidence/${id}`);
     if (!response.ok) throw new Error(`Evidence request failed (HTTP ${response.status})`);
     return toEvidenceItem((await response.json()) as BackendEvidence);
   },
   /** Entities (people, locations, orgs…) extracted from all evidence. */
   async entities(): Promise<BackendEntity[]> {
-    const response = await fetch(`${API_BASE}/api/entities?limit=300`);
+    const response = await request(`/api/entities?limit=300`);
     if (!response.ok) throw new Error(`Entities request failed (HTTP ${response.status})`);
     return ((await response.json()) as { items?: BackendEntity[] }).items ?? [];
   },
   /** Reconstructed timeline events across all evidence. */
   async timeline(): Promise<BackendTimelineEvent[]> {
-    const response = await fetch(`${API_BASE}/api/timeline?limit=500`);
+    const response = await request(`/api/timeline?limit=500`);
     if (!response.ok) throw new Error(`Timeline request failed (HTTP ${response.status})`);
     return ((await response.json()) as { items?: BackendTimelineEvent[] }).items ?? [];
   },
   /** Correct capture details and re-sync entities/timeline. */
   async updateCapture(id: string, meta: UploadMeta): Promise<EvidenceItem> {
-    const response = await fetch(`${API_BASE}/api/evidence/${id}/capture`, {
+    const response = await request(`/api/evidence/${id}/capture`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -254,7 +363,7 @@ export const api = {
   },
   /** Fetch the extracted text for one evidence item (drawer preview). */
   async evidenceText(id: string): Promise<string[]> {
-    const response = await fetch(`${API_BASE}/api/evidence/${id}`);
+    const response = await request(`/api/evidence/${id}`);
     if (!response.ok) throw new Error(`Evidence request failed (HTTP ${response.status})`);
     const payload = (await response.json()) as {
       extractedContent?: Array<{ text?: string }>;
@@ -266,13 +375,13 @@ export const api = {
   },
   /** Processing status for a preserved evidence item. */
   async evidenceStatus(id: string): Promise<EvidenceStatusResult> {
-    const response = await fetch(`${API_BASE}/api/evidence/${id}/status`);
+    const response = await request(`/api/evidence/${id}/status`);
     if (!response.ok) throw new Error(`Status request failed (HTTP ${response.status})`);
     return (await response.json()) as EvidenceStatusResult;
   },
   /** Download the preserved original file and save it in the browser. */
   async downloadEvidence(id: string, filename: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/evidence/${id}/download`);
+    const response = await request(`/api/evidence/${id}/download`);
     if (!response.ok) {
       const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
       throw new Error(payload?.error?.message ?? `Download failed (HTTP ${response.status})`);
@@ -289,7 +398,7 @@ export const api = {
   },
   /** Ask the evidence-grounded assistant (FastAPI POST /api/assistant/chat). */
   async chat(question: string, evidenceIds: string[] = [], limit = 8): Promise<ChatResult> {
-    const response = await fetch(`${API_BASE}/api/assistant/chat`, {
+    const response = await request(`/api/assistant/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, evidence_ids: evidenceIds, limit }),
@@ -302,7 +411,7 @@ export const api = {
   },
   /** Remove an evidence item from the active vault (soft delete; original retained). */
   async deleteEvidence(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/evidence/${id}`, { method: "DELETE" });
+    const response = await request(`/api/evidence/${id}`, { method: "DELETE" });
     if (!response.ok) {
       const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
       throw new Error(payload?.error?.message ?? `Delete failed (HTTP ${response.status})`);
@@ -310,19 +419,19 @@ export const api = {
   },
   /** Audit ledger entries. */
   async audit(): Promise<BackendAuditEntry[]> {
-    const response = await fetch(`${API_BASE}/api/audit?limit=300`);
+    const response = await request(`/api/audit?limit=300`);
     if (!response.ok) throw new Error(`Audit request failed (HTTP ${response.status})`);
     return ((await response.json()) as { items?: BackendAuditEntry[] }).items ?? [];
   },
   /** Saved reports. */
   async reports(): Promise<BackendReport[]> {
-    const response = await fetch(`${API_BASE}/api/reports?limit=50`);
+    const response = await request(`/api/reports?limit=50`);
     if (!response.ok) throw new Error(`Reports request failed (HTTP ${response.status})`);
     return ((await response.json()) as { items?: BackendReport[] }).items ?? [];
   },
   /** Generate a report on the backend. */
   async generateReport(input: { title?: string; reportType?: string }): Promise<BackendReport> {
-    const response = await fetch(`${API_BASE}/api/reports/generate`, {
+    const response = await request(`/api/reports/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -339,7 +448,7 @@ export const api = {
   },
   /** Download a rendered report PDF. */
   async reportPdf(id: string, filename: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/reports/${id}/pdf`);
+    const response = await request(`/api/reports/${id}/pdf`);
     if (!response.ok) throw new Error(`Report export failed (HTTP ${response.status})`);
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);

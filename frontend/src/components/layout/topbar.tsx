@@ -17,7 +17,6 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { SidebarContent } from "./sidebar";
 import { useApp, type View } from "@/store/app-store";
-import { workspace } from "@/lib/workspace";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -133,7 +132,7 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
 }
 
 export function Topbar() {
-  const { view, navigate, theme, toggleTheme, unreadCount, setSearchOpen, toast } = useApp();
+  const { view, navigate, theme, toggleTheme, unreadCount, setSearchOpen, toast, workspace, user, signOut } = useApp();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -226,8 +225,8 @@ export function Topbar() {
               className="z-50 w-[230px] rounded-xl border border-line bg-surface p-1 shadow-pop data-[state=open]:animate-scale-in"
             >
               <div className="px-2.5 py-2">
-                <p className="text-[12.5px] font-medium">{workspace.analyst}</p>
-                <p className="text-[11px] text-ink-3">aarav.shah@kestrel.legal</p>
+                <p className="text-[12.5px] font-medium">{user?.name ?? workspace.analyst}</p>
+                <p className="text-[11px] text-ink-3">{user?.email ?? "not signed in"}</p>
               </div>
               <DropdownMenu.Separator className="my-1 h-px bg-line" />
               <DropdownMenu.Item
@@ -251,7 +250,7 @@ export function Topbar() {
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-line" />
               <DropdownMenu.Item
-                onSelect={() => toast("Signed out", "Demo session — sign-in is not enabled.", "default")}
+                onSelect={() => void signOut()}
                 className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-danger outline-none data-[highlighted]:bg-danger/10"
               >
                 <LogOut className="h-3.5 w-3.5" /> Sign out

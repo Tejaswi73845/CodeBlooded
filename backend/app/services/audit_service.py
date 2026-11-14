@@ -57,6 +57,7 @@ def record_audit(
     details: dict[str, Any] | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    workspace_id=None,
 ) -> AuditLog:
     """Append an chained audit entry. The lock keeps the chain ordered in-process."""
     with _audit_lock:
@@ -82,6 +83,7 @@ def record_audit(
             details=details or {},
             ip_address=ip_address,
             user_agent=user_agent,
+            workspace_id=workspace_id,
             previous_hash=previous_hash,
             entry_hash=entry_hash,
             created_at=created_at,

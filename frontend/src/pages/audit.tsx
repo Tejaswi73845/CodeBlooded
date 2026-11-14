@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApp } from "@/store/app-store";
-import { workspace } from "@/lib/workspace";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +32,7 @@ const resultLabel = {
 } as const;
 
 export function AuditPage() {
-  const { auditLogs, toast, evidence } = useApp();
+  const { auditLogs, toast, evidence, workspace } = useApp();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<"all" | "success" | "warning" | "denied">("all");
   const [actor, setActor] = useState("all");

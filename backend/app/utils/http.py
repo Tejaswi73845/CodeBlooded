@@ -23,9 +23,20 @@ def optional_uuid(value: str | None, field: str = "id") -> uuid.UUID | None:
         raise AppError(422, "invalid_id", f"`{field}` must be a valid UUID.") from exc
 
 
+def bearer_token(request: Request) -> str | None:
+    header = request.headers.get("authorization") or ""
+    if header.lower().startswith("bearer "):
+        token = header[7:].strip()
+        return token or None
+    return None
+
+
 def actor_name(request: Request | None) -> str:
     if request is None:
         return settings.default_actor
+    state_user = getattr(request.state, "user", None)
+    if state_user is not None and getattr(state_user, "display_name", None):
+        return str(state_user.display_name)[:160]
     header = request.headers.get("x-actor") or request.headers.get("x-user-name")
     if header:
         return header.strip()[:160]

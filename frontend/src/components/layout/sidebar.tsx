@@ -2,20 +2,25 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ChevronsUpDown,
   Check,
-  FolderLock,
   FolderClosed,
   LayoutGrid,
   Network,
+  Pencil,
+  Plus,
   Settings,
   ShieldCheck,
   Sparkles,
   FileText,
   ScrollText,
   Timer,
+  Trash2,
 } from "lucide-react";
 import { useApp, type View } from "@/store/app-store";
 import { cn } from "@/lib/utils";
-import { workspace } from "@/lib/workspace";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const navigation: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
@@ -48,63 +53,181 @@ export function Brand() {
 }
 
 function WorkspaceSwitch() {
-  const { toast, evidence } = useApp();
+  const {
+    workspace,
+    workspaces,
+    activeWorkspaceId,
+    switchWorkspace,
+    createWorkspace,
+    renameWorkspace,
+    deleteWorkspace,
+  } = useApp();
+  const [mode, setMode] = useState<"create" | "rename" | "delete" | null>(null);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const initials =
+    workspace.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("") || "WS";
+
+  const close = () => {
+    if (!busy) setMode(null);
+  };
+
+  const submit = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    const ok =
+      mode === "create"
+        ? await createWorkspace(trimmed)
+        : mode === "rename"
+          ? await renameWorkspace(workspace.id, trimmed)
+          : false;
+    setBusy(false);
+    if (ok) setMode(null);
+  };
+
+  const confirmDelete = async () => {
+    setBusy(true);
+    const ok = await deleteWorkspace(workspace.id);
+    setBusy(false);
+    if (ok) setMode(null);
+  };
+
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button className="group flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-2.5 py-2 text-left transition-colors hover:bg-surface-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-soft text-[11px] font-semibold text-accent">
-            KL
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12.5px] font-medium leading-tight">{workspace.name}</span>
-            <span className="mt-0.5 block truncate text-[10.5px] leading-tight text-ink-3">
-              {workspace.caseId}
+    <>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button className="group flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-2.5 py-2 text-left transition-colors hover:bg-surface-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-soft text-[10px] font-semibold text-accent">
+              {initials}
             </span>
-          </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-ink-3" />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          sideOffset={6}
-          className="z-50 min-w-[228px] rounded-xl border border-line bg-surface p-1 shadow-pop data-[state=open]:animate-scale-in"
-        >
-          <DropdownMenu.Label className="px-2 py-1.5 text-[10.5px] font-medium uppercase tracking-wide text-ink-3">
-            Workspaces
-          </DropdownMenu.Label>
-          <DropdownMenu.Item
-            className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
-            onSelect={() => toast("Workspace", `Already viewing ${workspace.name}.`)}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] font-medium leading-tight">{workspace.name}</span>
+              <span className="mt-0.5 block truncate text-[10.5px] leading-tight text-ink-3">
+                {workspace.caseId}
+                {workspace.isDefault ? " · default" : ""}
+              </span>
+            </span>
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-ink-3" />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            sideOffset={6}
+            className="z-50 min-w-[248px] rounded-xl border border-line bg-surface p-1 shadow-pop data-[state=open]:animate-scale-in"
           >
-            <Check className="h-3.5 w-3.5 text-accent" />
-            <span className="flex-1">{workspace.name}</span>
-            <span className="text-[11px] text-ink-3">{evidence.length} files</span>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item
-            className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
-            onSelect={() => toast("Sandbox environment", "This environment is not configured.")}
-          >
-            <span className="h-3.5 w-3.5" />
-            <span className="flex-1">Training Sandbox</span>
-            <span className="text-[11px] text-ink-3">0 files</span>
-          </DropdownMenu.Item>
-          <DropdownMenu.Separator className="my-1 h-px bg-line" />
-          <DropdownMenu.Item
-            className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-ink-2 outline-none data-[highlighted]:bg-surface-3"
-            onSelect={() => toast("Invite sent", "Workspace invitations are managed by your admin.")}
-          >
-            <FolderLock className="h-3.5 w-3.5" />
-            Manage workspaces
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+            <DropdownMenu.Label className="px-2 py-1.5 text-[10.5px] font-medium uppercase tracking-wide text-ink-3">
+              Workspaces
+            </DropdownMenu.Label>
+            {workspaces.map((item) => (
+              <DropdownMenu.Item
+                key={item.id}
+                className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
+                onSelect={() => void switchWorkspace(item.id)}
+              >
+                {item.id === activeWorkspaceId ? (
+                  <Check className="h-3.5 w-3.5 text-accent" />
+                ) : (
+                  <span className="h-3.5 w-3.5" />
+                )}
+                <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                <span className="text-[11px] text-ink-3">{item.evidenceCount}</span>
+              </DropdownMenu.Item>
+            ))}
+            <DropdownMenu.Separator className="my-1 h-px bg-line" />
+            <DropdownMenu.Item
+              className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-ink-2 outline-none data-[highlighted]:bg-surface-3"
+              onSelect={() => {
+                setName("");
+                setMode("create");
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New workspace
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-ink-2 outline-none data-[highlighted]:bg-surface-3"
+              onSelect={() => {
+                setName(workspace.name);
+                setMode("rename");
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Rename workspace
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              disabled={workspace.isDefault}
+              className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-danger outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-danger/10"
+              onSelect={() => setMode("delete")}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete workspace
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
+      <Dialog open={mode !== null} onOpenChange={(open) => !open && close()}>
+        <DialogContent className="max-w-md p-5">
+          {mode === "delete" ? (
+            <>
+              <DialogTitle className="text-[15px] font-semibold">Delete workspace?</DialogTitle>
+              <DialogDescription className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                <span className="font-medium text-ink">{workspace.name}</span> will be removed. Its evidence,
+                reports and audit entries move to the default workspace. The original files are retained.
+              </DialogDescription>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" size="sm" onClick={close} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button variant="danger" size="sm" onClick={confirmDelete} disabled={busy}>
+                  <Trash2 className="h-3.5 w-3.5" /> {busy ? "Deleting…" : "Delete"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogTitle className="text-[15px] font-semibold">
+                {mode === "create" ? "New workspace" : "Rename workspace"}
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                Evidence, people, timeline, reports and audit entries are kept separate per workspace.
+              </DialogDescription>
+              <Input
+                autoFocus
+                className="mt-3"
+                value={name}
+                maxLength={160}
+                placeholder="Workspace name"
+                onChange={(event) => setName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void submit();
+                }}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" size="sm" onClick={close} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" onClick={submit} disabled={busy || !name.trim()}>
+                  {busy ? "Saving…" : mode === "create" ? "Create" : "Save"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { view, navigate, evidence, theme } = useApp();
+  const { view, navigate, evidence, theme, workspace } = useApp();
   const vaultAttention = evidence.filter((e) => e.status === "review" || e.status === "failed").length;
 
   const go = (id: View) => {

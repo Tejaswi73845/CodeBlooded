@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum as SAEnum, Index, Integer, JSON, String
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -26,6 +27,9 @@ class AuditLog(Base):
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     previous_hash: Mapped[str] = mapped_column(String(64))
     entry_hash: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

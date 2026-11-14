@@ -46,6 +46,9 @@ class Evidence(Base):
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     duplicate_of_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("evidence.id"), nullable=True)
     uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

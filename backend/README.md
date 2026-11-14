@@ -154,6 +154,9 @@ All settings are in `.env.example`. Important values:
 | `UPLOAD_DIR` | `./uploads` | Originals/derived/temp |
 | `MAX_UPLOAD_MB` | `2048` | Enforced while streaming |
 | `CORS_ORIGINS` | localhost:5173, … | Comma-separated; also allows any localhost port |
+| `AUTH_REQUIRED` | `false` | Enforce bearer-token auth on API routes |
+| `AUTH_SESSION_DAYS` | `7` | Session lifetime |
+| `DEFAULT_PASSWORD` | `tracevault` | Seeded analyst password |
 | `AI_PROVIDER` | `google` | `google` or `opencode` |
 | `GEMINI_API_KEY` | empty | Chat (google) and embeddings; server-side only |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Google chat model |
@@ -227,6 +230,14 @@ Base URL: `http://127.0.0.1:8000/api`
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/auth/login` | Email/password → opaque bearer token |
+| POST | `/auth/register` | Create an account → bearer token |
+| POST | `/auth/logout` | Revoke the presented session |
+| GET | `/auth/me` | Current user |
+| GET | `/workspaces` | List workspaces with active-evidence counts |
+| POST | `/workspaces` | Create a workspace (`{ "name": "…" }`) |
+| PATCH | `/workspaces/{id}` | Rename a workspace |
+| DELETE | `/workspaces/{id}` | Delete; its evidence/reports/audit rows move to the default workspace |
 | POST | `/evidence/upload` | Multipart `files` (or `file`); optional `date`, `time`, `location`, `persons` (JSON array), `note`, `autoDetect`; 202 with items/warnings |
 | GET | `/evidence` | Search/filter (`q`, `type`, `status`, `personId`, `sort`, pagination) |
 | GET | `/evidence/{id}` | Metadata, extracted content, entities, events, capture details, duplicates |
@@ -251,7 +262,7 @@ Base URL: `http://127.0.0.1:8000/api`
 | GET | `/audit/verify` | Recompute the hash chain |
 | GET | `/health` | DB/storage/processor capability report |
 
-All responses use camelCase and UTC timestamps with `Z` (the frontend's dialect). Errors have one shape:
+All responses use camelCase and UTC timestamps with `Z` (the frontend's dialect). Send `X-Workspace-Id: <uuid>` to scope evidence, entities, timeline, assistant, reports and audit to a workspace; an absent/unknown id resolves to the default workspace. Errors have one shape:
 
 ```json
 { "error": { "code": "unsupported_media_type", "message": "…", "details": {}, "requestId": "…" } }
@@ -335,7 +346,7 @@ If the request includes `evidenceIds` and none match active evidence, the assist
 * Uploads are never served statically.
 * No API keys are hardcoded; provider keys live only in the server environment.
 * CORS is limited to configured origins plus localhost dev ports.
-* There is **no authentication/RBAC** yet — add it before exposing the service publicly.
+* Sign-in uses PBKDF2 password hashes and opaque bearer sessions (only token hashes are stored). Set `AUTH_REQUIRED=true` to enforce authentication; without it the API accepts local unauthenticated calls.
 
 ## Tests
 

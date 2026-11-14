@@ -15,7 +15,6 @@ import {
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { useApp } from "@/store/app-store";
-import { workspace } from "@/lib/workspace";
 import type { Insight, PipelineStage } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -37,7 +36,7 @@ const kindMeta = {
 };
 
 export function DashboardPage() {
-  const { evidence, people, events, insights, navigate, openEvidence, selectPerson, ask } = useApp();
+  const { evidence, people, events, insights, navigate, openEvidence, selectPerson, ask, workspace } = useApp();
   const [activeInsight, setActiveInsight] = useState<Insight | null>(null);
 
   const recentEvidence = useMemo(

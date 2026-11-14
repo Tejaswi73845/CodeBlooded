@@ -20,7 +20,16 @@ import type {
   Person,
   Severity,
 } from "@/data/types";
-import { api, type BackendEntity, type BackendTimelineEvent, type UploadMeta } from "@/lib/api";
+import {
+  api,
+  setActiveWorkspace,
+  setAuthToken,
+  type AuthUser,
+  type BackendEntity,
+  type BackendTimelineEvent,
+  type UploadMeta,
+  type WorkspaceInfo,
+} from "@/lib/api";
 import { answer, type ChatMessage } from "@/lib/assistant";
 import { formatBytes } from "@/lib/format";
 
@@ -71,6 +80,28 @@ interface AppContextValue {
   thinking: boolean;
   ask: (question: string) => void;
   clearChat: () => void;
+  workspace: {
+    id: string;
+    name: string;
+    plan: string;
+    caseId: string;
+    caseName: string;
+    analyst: string;
+    analystRole: string;
+    analystInitials: string;
+    isDefault: boolean;
+  };
+  workspaces: WorkspaceInfo[];
+  activeWorkspaceId: string | null;
+  switchWorkspace: (id: string) => Promise<void>;
+  createWorkspace: (name: string) => Promise<boolean>;
+  renameWorkspace: (id: string, name: string) => Promise<boolean>;
+  deleteWorkspace: (id: string) => Promise<boolean>;
+  user: AuthUser | null;
+  authReady: boolean;
+  signIn: (email: string, password: string) => Promise<boolean>;
+  signUp: (name: string, email: string, password: string) => Promise<boolean>;
+  signOut: () => Promise<void>;
   toasts: Toast[];
   toast: (title: string, description?: string, tone?: Toast["tone"]) => void;
 }
@@ -181,6 +212,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
+  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const timers = useRef<number[]>([]);
   const chatGeneration = useRef(0);
 
@@ -190,18 +225,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("veritas-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void api.listEvidence().then((items) => {
-      if (cancelled || items.length === 0) return;
-      setEvidence((prev) => {
-        const seen = new Set(items.map((item) => item.id));
-        return [...items, ...prev.filter((item) => !seen.has(item.id))];
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
+  const refreshEvidence = useCallback(async () => {
+    try {
+      const items = await api.listEvidence();
+      setEvidence(items);
+    } catch {
+      setEvidence([]);
+    }
   }, []);
 
   const refreshConnections = useCallback(async () => {
@@ -238,10 +268,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    void refreshConnections();
-  }, [refreshConnections]);
-
   const refreshAudit = useCallback(async () => {
     try {
       const entries = await api.audit();
@@ -261,9 +287,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const activateWorkspace = useCallback(
+    async (id: string, list?: WorkspaceInfo[]) => {
+      setActiveWorkspace(id);
+      setActiveWorkspaceId(id);
+      localStorage.setItem("veritas-workspace", id);
+      if (list) setWorkspaces(list);
+      setEvidence([]);
+      setPeople([]);
+      setEvents([]);
+      setAuditLogs([]);
+      setUploads({});
+      setOpenEvidenceId(null);
+      chatGeneration.current += 1;
+      setMessages([]);
+      setThinking(false);
+      await Promise.all([refreshEvidence(), refreshConnections(), refreshAudit()]);
+    },
+    [refreshAudit, refreshConnections, refreshEvidence],
+  );
+
   useEffect(() => {
-    void refreshAudit();
-  }, [refreshAudit]);
+    const token = localStorage.getItem("veritas-token");
+    if (!token) {
+      setAuthReady(true);
+      return;
+    }
+    setAuthToken(token);
+    void api
+      .me()
+      .then((me) => setUser(me))
+      .catch(() => {
+        setAuthToken(null);
+        localStorage.removeItem("veritas-token");
+      })
+      .finally(() => setAuthReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void (async () => {
+      try {
+        const list = await api.workspaces();
+        setWorkspaces(list);
+        const stored = localStorage.getItem("veritas-workspace");
+        const active =
+          list.find((workspace) => workspace.id === stored) ??
+          list.find((workspace) => workspace.isDefault) ??
+          list[0];
+        if (active) await activateWorkspace(active.id, list);
+      } catch {
+        // Backend unreachable: the UI shows empty states.
+      }
+    })();
+  }, [activateWorkspace, user]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -378,6 +455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     // Keep the optimistic item if the refresh fails.
                   }
                   void refreshConnections();
+                  void api.workspaces().then(setWorkspaces).catch(() => undefined);
                   setNotifications((prev) => [
                     {
                       id: `n-${id}`,
@@ -427,6 +505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setOpenEvidenceId((current) => (current === id ? null : current));
       void refreshAudit();
+      void api.workspaces().then(setWorkspaces).catch(() => undefined);
       toast(
         "Evidence removed",
         `${item?.name ?? "Item"} removed from the active vault. Original retained for custody.`,
@@ -514,6 +593,168 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setThinking(false);
   }, []);
 
+  const switchWorkspace = useCallback(
+    async (id: string) => {
+      if (id === activeWorkspaceId) return;
+      try {
+        const list = await api.workspaces();
+        await activateWorkspace(id, list);
+      } catch {
+        await activateWorkspace(id);
+      }
+    },
+    [activateWorkspace, activeWorkspaceId],
+  );
+
+  const createWorkspace = useCallback(
+    async (name: string) => {
+      try {
+        const created = await api.createWorkspace(name);
+        const list = await api.workspaces();
+        setWorkspaces(list);
+        await activateWorkspace(created.id, list);
+        toast("Workspace created", `Switched to “${created.name}”.`, "success");
+        return true;
+      } catch (error) {
+        toast(
+          "Could not create workspace",
+          error instanceof Error ? error.message : "The workspace could not be created.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [activateWorkspace, toast],
+  );
+
+  const renameWorkspace = useCallback(
+    async (id: string, name: string) => {
+      try {
+        const updated = await api.renameWorkspace(id, name);
+        setWorkspaces(await api.workspaces());
+        toast("Workspace renamed", `Now called “${updated.name}”.`, "success");
+        return true;
+      } catch (error) {
+        toast(
+          "Could not rename workspace",
+          error instanceof Error ? error.message : "The workspace could not be renamed.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [toast],
+  );
+
+  const deleteWorkspace = useCallback(
+    async (id: string) => {
+      try {
+        await api.deleteWorkspace(id);
+        const list = await api.workspaces();
+        setWorkspaces(list);
+        if (activeWorkspaceId === id) {
+          const fallback = list.find((workspace) => workspace.isDefault) ?? list[0];
+          if (fallback) await activateWorkspace(fallback.id, list);
+        }
+        toast("Workspace deleted", "Its evidence was moved to the default workspace.", "success");
+        return true;
+      } catch (error) {
+        toast(
+          "Could not delete workspace",
+          error instanceof Error ? error.message : "The workspace could not be deleted.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [activateWorkspace, activeWorkspaceId, toast],
+  );
+
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  const analystInitials =
+    (user?.name ?? "Analyst")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("") || "AN";
+  const workspace = useMemo(
+    () => ({
+      id: activeWorkspaceId ?? "",
+      name: activeWorkspace?.name ?? "Workspace",
+      plan: "Evidence workspace",
+      caseId: activeWorkspaceId ? `WS-${activeWorkspaceId.slice(0, 8).toUpperCase()}` : "WS",
+      caseName: activeWorkspace?.name ?? "Evidence workspace",
+      analyst: user?.name ?? "Analyst",
+      analystRole: user?.role ?? "Investigator",
+      analystInitials,
+      isDefault: activeWorkspace?.isDefault ?? false,
+    }),
+    [activeWorkspace, activeWorkspaceId, analystInitials, user],
+  );
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const result = await api.login(email, password);
+        setAuthToken(result.token);
+        localStorage.setItem("veritas-token", result.token);
+        setUser(result.user);
+        toast("Signed in", `Welcome back, ${result.user.name}.`, "success");
+        return true;
+      } catch (error) {
+        toast(
+          "Sign-in failed",
+          error instanceof Error ? error.message : "Check your email and password.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [toast],
+  );
+
+  const signUp = useCallback(
+    async (name: string, email: string, password: string) => {
+      try {
+        const result = await api.register(name, email, password);
+        setAuthToken(result.token);
+        localStorage.setItem("veritas-token", result.token);
+        setUser(result.user);
+        toast("Account created", `Welcome, ${result.user.name}.`, "success");
+        return true;
+      } catch (error) {
+        toast(
+          "Could not create account",
+          error instanceof Error ? error.message : "Please try again.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [toast],
+  );
+
+  const signOut = useCallback(async () => {
+    await api.logout().catch(() => undefined);
+    setAuthToken(null);
+    localStorage.removeItem("veritas-token");
+    localStorage.removeItem("veritas-workspace");
+    setUser(null);
+    setActiveWorkspace(null);
+    setActiveWorkspaceId(null);
+    setWorkspaces([]);
+    setEvidence([]);
+    setPeople([]);
+    setEvents([]);
+    setAuditLogs([]);
+    setUploads({});
+    setOpenEvidenceId(null);
+    setMessages([]);
+    setThinking(false);
+    toast("Signed out", "You have been signed out.", "success");
+  }, [toast]);
+
   const value = useMemo<AppContextValue>(
     () => ({
       view,
@@ -545,6 +786,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       thinking,
       ask,
       clearChat,
+      workspace,
+      workspaces,
+      activeWorkspaceId,
+      switchWorkspace,
+      createWorkspace,
+      renameWorkspace,
+      deleteWorkspace,
+      user,
+      authReady,
+      signIn,
+      signUp,
+      signOut,
       toasts,
       toast,
     }),
@@ -574,6 +827,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       thinking,
       ask,
       clearChat,
+      workspace,
+      workspaces,
+      activeWorkspaceId,
+      switchWorkspace,
+      createWorkspace,
+      renameWorkspace,
+      deleteWorkspace,
+      user,
+      authReady,
+      signIn,
+      signUp,
+      signOut,
       toasts,
       toast,
     ],

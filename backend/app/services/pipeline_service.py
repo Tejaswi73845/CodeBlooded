@@ -89,6 +89,7 @@ def _process_evidence(evidence_id: str) -> None:
             target_type="evidence",
             target_id=str(evidence.id),
             details={"filename": evidence.original_filename, "type": evidence.file_type.value},
+            workspace_id=evidence.workspace_id,
         )
 
         reset_derived(db, evidence.id)
@@ -160,6 +161,7 @@ def _process_evidence(evidence_id: str) -> None:
                 "ragEmbedded": rag_stats.embedded,
                 "ragErrors": rag_stats.errors[:3],
             },
+            workspace_id=evidence.workspace_id,
         )
     except Exception as exc:  # noqa: BLE001 - background failures belong in evidence state
         logger.exception("Processing failed for evidence %s", evidence_id)
@@ -182,6 +184,7 @@ def _process_evidence(evidence_id: str) -> None:
                     target_id=str(evidence.id),
                     result=AuditResult.WARNING,
                     details={"error": evidence.error_message, "filename": evidence.original_filename},
+                    workspace_id=evidence.workspace_id,
                 )
         except Exception:  # pragma: no cover - last-resort guard
             logger.exception("Could not persist failure state for evidence %s", evidence_id)
