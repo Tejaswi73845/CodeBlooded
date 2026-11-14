@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tracevault-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tracevault
+      POSTGRES_PASSWORD: tracevault
+      POSTGRES_DB: tracevault
+    ports:
+      - "5432:5432"
+    volumes:
+      - tracevault_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracevault -d tracevault"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tracevault_pgdata:
