@@ -79,7 +79,7 @@ export function EventEditDialog({ event, busy, onClose, onSave }: EventEditDialo
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full resize-none rounded-[10px] border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent/60 focus:outline-none"
+              className="w-full resize-none rounded-[8px] border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] focus:border-accent/70 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)] focus:outline-none"
             />
           </Field>
         </div>
@@ -97,7 +97,7 @@ export function EventEditDialog({ event, busy, onClose, onSave }: EventEditDialo
             onChange={(e) => setContext(e.target.value)}
             rows={3}
             maxLength={2000}
-            className="mt-2 w-full resize-none rounded-[10px] border border-line bg-surface px-3 py-2 text-[12.5px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent/60 focus:outline-none"
+            className="mt-2 w-full resize-none rounded-[8px] border border-line bg-surface px-3 py-2 text-[12.5px] text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] focus:border-accent/70 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)] focus:outline-none"
             placeholder="e.g. This is a customer-support conversation, not a threat. The payment was a refund, not extortion."
           />
         </div>

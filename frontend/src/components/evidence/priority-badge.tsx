@@ -1,7 +1,12 @@
 import { Badge } from "@/components/ui/badge";
-import type { EvidenceItem, IncidentEvent } from "@/data/types";
+import type { EvidenceItem, EvidenceStatus, IncidentEvent } from "@/data/types";
 
 export type EvidencePriority = "critical" | "attention" | "normal";
+
+/** Priority only adds information for items that are not already flagged by status. */
+export function shouldShowPriority(status: EvidenceStatus): boolean {
+  return status === "processed" || status === "processing" || status === "queued";
+}
 
 /** Derive a review priority for an evidence item from its integrity and linked events. */
 export function evidencePriority(item: EvidenceItem, events: IncidentEvent[]): EvidencePriority {

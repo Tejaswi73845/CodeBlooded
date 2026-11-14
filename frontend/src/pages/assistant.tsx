@@ -9,7 +9,7 @@ import {
   Square,
   Wand2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/store/app-store";
 import { suggestedPrompts } from "@/lib/assistant";
 import { PageHeader } from "@/components/page-header";
@@ -69,6 +69,36 @@ export function AssistantPage() {
   const [draft, setDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Fit the transcript to the space actually left between the page header and the footer.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const root = rootRef.current;
+      const grid = gridRef.current;
+      if (!root || !grid) return;
+      const gridTop = grid.getBoundingClientRect().top;
+      const main = root.closest("main");
+      const mainPad = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+      const footer = document.querySelector("footer");
+      const footerVisible = footer ? getComputedStyle(footer).display !== "none" : false;
+      const footerHeight = footerVisible && footer ? footer.getBoundingClientRect().height : 0;
+      const available = Math.max(360, Math.floor(window.innerHeight - gridTop - mainPad - footerHeight - 12));
+      grid.style.height = `${available}px`;
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const observer = new ResizeObserver(measure);
+    if (rootRef.current) observer.observe(rootRef.current);
+    const header = rootRef.current?.querySelector("header");
+    if (header) observer.observe(header);
+    void document.fonts?.ready.then(measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer.disconnect();
+    };
+  }, []);
 
   const latestReply = useMemo(
     () => [...messages].reverse().find((message) => message.role === "assistant"),
@@ -77,7 +107,12 @@ export function AssistantPage() {
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (!el) return;
+    if (messages.length === 0) {
+      el.scrollTo({ top: 0 });
+      return;
+    }
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, thinking]);
 
   const submit = (text?: string) => {
@@ -95,8 +130,9 @@ export function AssistantPage() {
   };
 
   return (
-    <div className="animate-fade-in">
+    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col animate-fade-in">
       <PageHeader
+        className="shrink-0"
         eyebrow={
           <>
             <Badge tone="violet">
@@ -114,16 +150,18 @@ export function AssistantPage() {
         }
       />
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex h-[calc(100dvh-210px)] min-h-[540px] flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card">
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-ink text-surface">
-                <Sparkles className="h-3 w-3" />
+      <div ref={gridRef} className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_304px]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent font-serif text-[13px] leading-none text-on-accent">
+                V
               </span>
               <div>
-                <p className="text-[12px] font-semibold leading-tight">Veritas Intelligence</p>
-                <p className="text-[10px] leading-tight text-ink-3">Case {workspace.caseId} · evidence context</p>
+                <p className="font-serif text-[15px] font-medium leading-tight tracking-[-0.01em]">Veritas Intelligence</p>
+                <p className="mt-0.5 font-mono text-[9px] leading-tight text-ink-3">
+                  case {workspace.caseId} · evidence context
+                </p>
               </div>
             </div>
             <Badge tone="neutral" className="hidden sm:inline-flex">
@@ -133,58 +171,61 @@ export function AssistantPage() {
 
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="mx-auto flex h-full max-w-xl flex-col justify-center px-5 py-8">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-2 text-accent shadow-card">
-                  <Sparkles className="h-5 w-5" />
+              <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-5 py-8">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent/20 bg-accent-soft font-serif text-[17px] text-accent">
+                  V
                 </div>
-                <h2 className="mt-3 text-[19px] font-semibold tracking-[-0.02em]">Ask the evidence.</h2>
-                <p className="mt-1 max-w-md text-[12.5px] leading-relaxed text-ink-2">
+                <h2 className="mt-4 font-serif text-[24px] font-normal leading-tight tracking-[-0.02em] sm:text-[26px]">
+                  Ask the evidence.
+                </h2>
+                <p className="mt-2 max-w-md text-[12.5px] leading-relaxed text-ink-2">
                   Summaries, inconsistencies, chronology and entity lookups across all preserved files in{" "}
-                  {workspace.caseId}. Answers stay tied to their sources.
+                  <span className="font-mono text-[11px]">{workspace.caseId}</span>. Answers stay tied to their sources.
                 </p>
 
-                <div className="mt-5 grid gap-1.5 sm:grid-cols-2">
+                <div className="mt-6 border-t border-line">
                   {suggestedPrompts().map((prompt) => (
                     <button
                       key={prompt}
                       onClick={() => submit(prompt)}
-                      className="group flex items-start gap-2 rounded-xl border border-line bg-surface p-2.5 text-left transition-all hover:border-line-strong hover:shadow-card"
+                      className="group flex w-full items-start gap-2.5 border-b border-line px-1 py-2.5 text-left transition-colors hover:bg-surface-2"
                     >
                       <Wand2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-3 group-hover:text-accent" />
-                      <span className="text-[11.5px] leading-snug text-ink-2 group-hover:text-ink">{prompt}</span>
+                      <span className="flex-1 text-[11.5px] leading-snug text-ink-2 group-hover:text-ink">{prompt}</span>
+                      <ArrowUp className="mt-1 h-3 w-3 rotate-45 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" />
                     </button>
                   ))}
                 </div>
 
-                <div className="mt-5 flex items-center gap-2">
+                <div className="mt-4 flex items-center gap-2">
                   <span className="flex -space-x-1.5">
                     {people.slice(0, 4).map((p) => (
                       <PersonAvatar key={p.id} person={p} size="xs" ring />
                     ))}
                   </span>
-                  <p className="text-[10.5px] text-ink-3">
-                    {people.length} people, {events.length} events and {evidence.length} files indexed
+                  <p className="font-mono text-[9.5px] text-ink-3">
+                    {people.length} people · {events.length} events · {evidence.length} files indexed
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="mx-auto max-w-[720px] space-y-5 px-4 py-5 sm:px-6">
+              <div className="mx-auto max-w-[720px] space-y-6 px-4 py-6 sm:px-6">
                 {messages.map((message) =>
                   message.role === "user" ? (
                     <div key={message.id} className="flex justify-end">
-                      <div className="max-w-[85%] rounded-[16px] rounded-br-[5px] bg-accent px-3.5 py-2 text-[12.5px] leading-relaxed text-white shadow-sm">
+                      <div className="max-w-[85%] rounded-[12px] rounded-br-[3px] bg-accent px-3.5 py-2.5 text-[12.5px] leading-relaxed text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
                         {message.text}
                       </div>
                     </div>
                   ) : (
-                    <div key={message.id} className="group flex gap-2.5">
-                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-accent">
-                        <Sparkles className="h-3.5 w-3.5" />
+                    <div key={message.id} className="group flex gap-3">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/20 bg-accent-soft font-serif text-[12px] text-accent">
+                        V
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11.5px] font-semibold">Veritas</span>
-                          <span className="text-[10px] text-ink-3">evidence-grounded</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-serif text-[14px] font-medium">Veritas</span>
+                          <span className="font-mono text-[9px] text-ink-3">evidence-grounded</span>
                         </div>
                         <div className="mt-1.5">
                           <Answer text={message.text} />
@@ -240,14 +281,14 @@ export function AssistantPage() {
                 )}
 
                 {thinking && (
-                  <div className="flex gap-2.5">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-accent">
-                      <Sparkles className="h-3.5 w-3.5" />
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/20 bg-accent-soft font-serif text-[12px] text-accent">
+                      V
                     </span>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11.5px] font-semibold">Veritas</span>
-                        <span className="text-[10px] text-ink-3">reviewing sources…</span>
+                        <span className="font-serif text-[14px] font-medium">Veritas</span>
+                        <span className="font-mono text-[9px] text-ink-3">reviewing sources…</span>
                       </div>
                       <div className="mt-2 flex items-center gap-1.5">
                         {[0, 1, 2].map((i) => (
@@ -257,7 +298,7 @@ export function AssistantPage() {
                             style={{ animationDelay: `${i * 160}ms` }}
                           />
                         ))}
-                        <span className="ml-1 text-[10.5px] text-ink-3">
+                        <span className="ml-1 text-[10px] text-ink-3">
                           spanning timeline, chat exports and financial records
                         </span>
                       </div>
@@ -268,8 +309,8 @@ export function AssistantPage() {
             )}
           </div>
 
-          <div className="border-t border-line bg-surface px-3 pb-2.5 pt-2 sm:px-4">
-            <div className="rounded-xl border border-line bg-surface-2 p-1.5 transition-colors focus-within:border-accent/50">
+          <div className="border-t border-line bg-surface px-3 pb-2.5 pt-2.5 sm:px-4">
+            <div className="rounded-[10px] border border-line bg-surface-2 p-1.5 transition-[border-color,box-shadow] focus-within:border-accent/50 focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_9%,transparent)]">
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -285,7 +326,7 @@ export function AssistantPage() {
                 className="max-h-32 min-h-[30px] w-full resize-none bg-transparent px-2 py-1 text-[12.5px] leading-relaxed outline-none placeholder:text-ink-3"
               />
               <div className="flex items-center gap-1">
-                <span className="text-[9.5px] text-ink-3">{evidence.length} sources in context</span>
+                <span className="font-mono text-[9px] text-ink-3">{evidence.length} sources in context</span>
                 <div className="ml-auto flex items-center gap-1.5">
                   {thinking ? (
                     <Button variant="secondary" size="sm" disabled>
@@ -296,7 +337,7 @@ export function AssistantPage() {
                       onClick={() => submit()}
                       disabled={!draft.trim()}
                       aria-label="Send message"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white transition-opacity disabled:opacity-35"
+                      className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-accent text-on-accent transition-opacity disabled:opacity-35"
                     >
                       <ArrowUp className="h-4 w-4" />
                     </button>
@@ -310,15 +351,15 @@ export function AssistantPage() {
           </div>
         </div>
 
-        <aside className="hidden flex-col gap-3 lg:flex">
-          <div className="rounded-card border border-line bg-surface p-4 shadow-card">
+        <aside className="hidden min-h-0 flex-col gap-4 overflow-y-auto pr-0.5 lg:flex">
+          <div className="order-1 rounded-card border border-line bg-surface p-4 shadow-card">
             <div className="flex items-center justify-between">
-              <h3 className="text-[12px] font-semibold">Session context</h3>
+              <h3 className="font-serif text-[15px] font-medium">Session context</h3>
               <Badge tone="success" dot>
                 Live
               </Badge>
             </div>
-            <dl className="mt-2.5 space-y-1.5 text-[11px]">
+            <dl className="mt-3 divide-y divide-line border-t border-line text-[11px]">
               {[
                 ["Case", workspace.caseId],
                 ["Files", `${evidence.length} preserved`],
@@ -326,23 +367,23 @@ export function AssistantPage() {
                 ["People", `${people.length} resolved`],
                 ["Integrity", `${evidence.filter((e) => e.integrity === "verified").length} / ${evidence.length} verified`],
               ].map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between">
+                <div key={k} className="flex items-center justify-between py-1.5">
                   <dt className="text-ink-3">{k}</dt>
-                  <dd className="font-medium">{v}</dd>
+                  <dd className="font-mono text-[10px] font-medium">{v}</dd>
                 </div>
               ))}
             </dl>
           </div>
 
           {messages.length > 0 && (
-            <div className="rounded-card border border-line bg-surface p-4 shadow-card">
-              <h3 className="text-[12px] font-semibold">Suggested prompts</h3>
-              <div className="mt-2 space-y-1">
+            <div className="order-3 rounded-card border border-line bg-surface p-4 shadow-card">
+              <h3 className="font-serif text-[15px] font-medium">Suggested prompts</h3>
+              <div className="mt-2 space-y-0.5">
                 {suggestedPrompts().map((p) => (
                   <button
                     key={p}
                     onClick={() => submit(p)}
-                    className="flex w-full items-start gap-1.5 rounded-lg px-1.5 py-1.5 text-left text-[11px] leading-snug text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+                    className="flex w-full items-start gap-1.5 rounded-[7px] px-1.5 py-1.5 text-left text-[11px] leading-snug text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
                   >
                     <Wand2 className="mt-0.5 h-3 w-3 shrink-0 text-ink-3" />
                     {p}
@@ -353,10 +394,10 @@ export function AssistantPage() {
           )}
 
           {latestReply && (
-            <div className="rounded-card border border-line bg-surface p-4 shadow-card">
+            <div className="order-2 rounded-card border border-line bg-surface p-4 shadow-card">
               <div className="flex items-center justify-between">
-                <h3 className="text-[12px] font-semibold">Sources used</h3>
-                <Badge tone="neutral">{latestReply.sources?.length ?? 0}</Badge>
+                <h3 className="font-serif text-[15px] font-medium">Sources used</h3>
+                <Badge tone="neutral" className="font-mono">{latestReply.sources?.length ?? 0}</Badge>
               </div>
               <p className="mt-0.5 text-[10px] text-ink-3">Pulled from the last answer</p>
               {latestReply.sources && latestReply.sources.length > 0 ? (
@@ -398,7 +439,7 @@ export function AssistantPage() {
             </div>
           )}
 
-          <p className="flex items-start gap-1.5 px-1 text-[10px] leading-relaxed text-ink-3">
+          <p className="order-4 flex items-start gap-1.5 px-1 text-[10px] leading-relaxed text-ink-3">
             <ShieldCheck className="mt-px h-3 w-3 shrink-0 text-success" />
             Answers are generated from preserved evidence through the configured AI provider.
           </p>

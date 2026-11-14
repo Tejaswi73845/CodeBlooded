@@ -7,14 +7,14 @@ export function ToastViewport() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[342px] max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden">
       {toasts.map((t) => {
         const Icon = t.tone === "success" ? CircleCheck : t.tone === "danger" ? AlertTriangle : Info;
         return (
           <div
             key={t.id}
             role="status"
-            className="pointer-events-auto flex items-start gap-2.5 rounded-[12px] border border-line bg-surface/95 px-3 py-2.5 shadow-pop backdrop-blur-xl animate-rise"
+            className="pointer-events-auto flex items-start gap-2.5 rounded-[10px] border border-line-strong/60 bg-surface/97 px-3 py-2.5 shadow-pop backdrop-blur-xl animate-rise"
           >
             <Icon
               className={cn(

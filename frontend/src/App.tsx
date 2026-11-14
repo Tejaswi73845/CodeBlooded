@@ -50,13 +50,13 @@ export default function App() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6 lg:px-8 print:p-0">
-          <div key={view}>{page}</div>
+        <main className="mx-auto flex w-full max-w-[1500px] flex-1 flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-7 print:p-0">
+          <div key={view} className="flex min-h-0 flex-1 flex-col">{page}</div>
         </main>
-        <footer className="mx-auto hidden w-full max-w-[1440px] items-center justify-between gap-4 px-4 pb-4 text-[10px] text-ink-3 sm:px-6 lg:flex lg:px-8 print:hidden">
-          <span>Veritas Evidence Intelligence · {workspace.name}</span>
+        <footer className="mx-auto hidden w-full max-w-[1500px] items-center justify-between gap-4 border-t border-line/70 px-4 py-3 font-mono text-[9.5px] text-ink-3 sm:px-6 lg:flex lg:px-9 print:hidden">
+          <span>Veritas · {workspace.name}</span>
           <span className="inline-flex items-center gap-3">
-            <span>Case {workspace.caseId}</span>
+            <span>{workspace.caseId}</span>
             <span className="h-2.5 w-px bg-line" />
             <span>SHA-256 custody ledger</span>
           </span>

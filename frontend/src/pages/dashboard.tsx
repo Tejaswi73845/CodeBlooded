@@ -19,14 +19,14 @@ import { useApp } from "@/store/app-store";
 import { api, type EvidenceAiSummary } from "@/lib/api";
 import type { Insight, PipelineStage } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
-import { StatCard } from "@/components/stat-card";
+import { StatCard, StatStrip } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PersonAvatar, AvatarStack } from "@/components/person-avatar";
 import { FileTypeTile, StatusBadge } from "@/components/evidence/file-type";
-import { PriorityBadge, SeverityBadge, eventSeverityTag, evidencePriority } from "@/components/evidence/priority-badge";
+import { PriorityBadge, SeverityBadge, eventSeverityTag, evidencePriority, shouldShowPriority } from "@/components/evidence/priority-badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatBytes, formatDate, formatTime, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -101,6 +101,8 @@ export function DashboardPage() {
   const highRisk = people.filter((p) => p.risk === "high").length;
   const last48h = evidence.filter((e) => Date.now() - +new Date(e.uploadedAt) < 48 * 3600 * 1000).length;
   const criticalEvents = events.filter((e) => e.severity === "critical").length;
+  const warningEvents = events.filter((e) => e.severity === "warning").length;
+  const normalEvents = Math.max(0, events.length - criticalEvents - warningEvents);
   const mismatches = evidence.filter((e) => e.integrity === "mismatch").length;
   const processingCount = evidence.filter((e) => e.status === "processing" || e.status === "queued").length;
   const searchable = evidence.filter((e) => e.status === "processed").length;
@@ -161,7 +163,7 @@ export function DashboardPage() {
       <PageHeader
         eyebrow={
           <>
-            <Badge tone="neutral" className="font-mono text-[10.5px] tracking-tight">
+            <Badge tone="neutral" className="font-mono tracking-[0.01em]">
               {workspace.caseId}
             </Badge>
             <Badge tone="success" dot>
@@ -187,48 +189,48 @@ export function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatStrip>
         <StatCard
           label="Total evidence"
           value={evidence.length}
           footnote={`${last48h} added in the last 48 hours`}
           trend={last48h ? `+${last48h}` : undefined}
           icon={FileStack}
-          tint="#007AFF"
+          tint="#7a2e36"
         />
         <StatCard
           label="People identified"
           value={people.length}
           footnote={`${highRisk} high-risk`}
           icon={Users}
-          tint="#5E5CE6"
+          tint="#4e4c78"
         />
         <StatCard
           label="Events detected"
           value={events.length}
           footnote={`${criticalEvents} critical events`}
           icon={CalendarDays}
-          tint="#FF9F0A"
+          tint="#8c601c"
         />
         <StatCard
           label="Pending reviews"
           value={pendingReviews}
           footnote={`${mismatches} integrity mismatch${mismatches === 1 ? "" : "es"}`}
           icon={ShieldAlert}
-          tint="#FF3B30"
+          tint="#9d2b2b"
         />
-      </div>
+      </StatStrip>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-12">
+      <div className="mt-4 grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-8">
           <CardHeader>
             <div>
               <CardTitle>Recent evidence</CardTitle>
-              <p className="mt-0.5 text-[11.5px] text-ink-2">Newest preserved items across all sources</p>
+              <p className="mt-1 text-[11px] text-ink-2">Newest preserved items across all sources</p>
             </div>
             <button
               onClick={() => navigate("vault")}
-              className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-accent hover:underline"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline"
             >
               View all <ChevronRight className="h-3 w-3" />
             </button>
@@ -239,12 +241,14 @@ export function DashboardPage() {
                 <li key={item.id}>
                   <button
                     onClick={() => openEvidence(item.id)}
-                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                    className="group flex w-full items-center gap-3 rounded-[8px] px-3 py-3 text-left transition-colors hover:bg-surface-2"
                   >
                     <FileTypeTile type={item.type} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12.5px] font-medium">{item.name}</span>
-                      <span className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-ink-3">
+                      <span className="mt-1 flex items-center gap-1.5 font-mono text-[9.5px] text-ink-3">
+                        {item.hash.slice(0, 10)}
+                        <span className="h-0.5 w-0.5 rounded-full bg-ink-3" />
                         {formatBytes(item.size)}
                         <span className="h-0.5 w-0.5 rounded-full bg-ink-3" />
                         {item.source}
@@ -257,10 +261,12 @@ export function DashboardPage() {
                       />
                     </span>
                     <span className="hidden w-[150px] items-center justify-end gap-1.5 md:flex">
-                      <PriorityBadge priority={evidencePriority(item, events)} />
+                      {shouldShowPriority(item.status) && (
+                        <PriorityBadge priority={evidencePriority(item, events)} />
+                      )}
                       <StatusBadge status={item.status} />
                     </span>
-                    <span className="hidden w-[58px] text-right text-[10.5px] text-ink-3 sm:block">
+                    <span className="hidden w-[58px] text-right font-mono text-[9.5px] text-ink-3 sm:block">
                       {timeAgo(item.uploadedAt)}
                     </span>
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -293,18 +299,18 @@ export function DashboardPage() {
                     <FileTypeTile type={latestEvidence.type} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[12px] font-medium">{latestEvidence.name}</p>
-                      <p className="text-[10px] text-ink-3">
+                      <p className="mt-0.5 font-mono text-[9.5px] text-ink-3">
                         {timeAgo(latestEvidence.uploadedAt)} · newest upload
                       </p>
                     </div>
                   </div>
-                  <div className="mt-2 max-h-40 overflow-y-auto rounded-lg bg-surface-2 p-2.5 text-[11.5px] leading-relaxed text-ink-2">
+                  <div className="mt-2.5 max-h-44 overflow-y-auto rounded-[8px] border border-line bg-surface-2 p-3 text-[11.5px] leading-relaxed text-ink-2">
                     {summaryLoading
                       ? "Summarising evidence…"
                       : summary?.summary ?? "No summary is available for this item yet."}
                   </div>
                   {summary?.limitations && summary.limitations.length > 0 && (
-                    <p className="mt-1 line-clamp-2 text-[10px] text-ink-3">{summary.limitations[0]}</p>
+                    <p className="mt-1.5 line-clamp-2 text-[10px] text-ink-3">{summary.limitations[0]}</p>
                   )}
                   <div className="mt-2 flex items-center justify-between">
                     <button
@@ -315,7 +321,7 @@ export function DashboardPage() {
                     </button>
                     <button
                       onClick={() => void refreshSummary()}
-                      className="flex items-center gap-1 text-[10.5px] text-ink-3 transition-colors hover:text-ink"
+                      className="flex items-center gap-1 font-mono text-[9.5px] text-ink-3 transition-colors hover:text-ink"
                     >
                       <RefreshCw className={cn("h-3 w-3", summaryLoading && "animate-spin")} /> Refresh
                     </button>
@@ -326,23 +332,41 @@ export function DashboardPage() {
                   Upload evidence to see an AI summary of your newest file here.
                 </p>
               ))}
+            {insights.length === 0 && (
+              <div className="mx-2 mt-2 border-t border-line pt-3">
+                <p className="docket-label">Event severity</p>
+                <div className="mt-2 space-y-1.5">
+                  {[
+                    ["Critical", criticalEvents, "bg-danger"],
+                    ["Attention", warningEvents, "bg-warning"],
+                    ["Normal", normalEvents, "bg-success"],
+                  ].map(([label, value, dot]) => (
+                    <div key={String(label)} className="flex items-center gap-2 text-[11px]">
+                      <span className={cn("h-1.5 w-1.5 rounded-full", String(dot))} />
+                      <span className="flex-1 text-ink-2">{label}</span>
+                      <span className="font-mono text-[10px] tabular-nums text-ink-3">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {insights.slice(0, 3).map((insight) => {
               const meta = kindMeta[insight.kind];
               return (
                 <button
                   key={insight.id}
                   onClick={() => setActiveInsight(insight)}
-                  className="w-full rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                  className="w-full rounded-[8px] px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
                 >
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-md",
+                        "flex h-5 w-5 items-center justify-center rounded-[5px] border",
                         insight.severity === "critical"
-                          ? "bg-danger/10 text-danger"
+                          ? "border-danger/20 bg-danger/10 text-danger"
                           : insight.severity === "warning"
-                            ? "bg-warning/12 text-warning"
-                            : "bg-accent-soft text-accent",
+                            ? "border-warning/20 bg-warning/10 text-warning"
+                            : "border-accent/15 bg-accent-soft text-accent",
                       )}
                     >
                       <meta.icon className="h-3 w-3" />
@@ -350,10 +374,10 @@ export function DashboardPage() {
                     <span className="truncate text-[12px] font-medium">{insight.title}</span>
                   </div>
                   <p className="mt-1 line-clamp-2 pl-7 text-[11.5px] leading-relaxed text-ink-2">{insight.body}</p>
-                  <div className="mt-1.5 flex items-center gap-2 pl-7">
-                    <span className="text-[10px] text-ink-3">{meta.label}</span>
+                  <div className="mt-1.5 flex items-center gap-2 pl-7 font-mono text-[9.5px] text-ink-3">
+                    <span>{meta.label}</span>
                     <span className="h-0.5 w-0.5 rounded-full bg-ink-3" />
-                    <span className="text-[10px] font-medium text-ink-2">{insight.confidence}% confidence</span>
+                    <span>{insight.confidence}% confidence</span>
                     {!insight.reviewed && <span className="h-1 w-1 rounded-full bg-accent" />}
                   </div>
                 </button>
@@ -398,33 +422,33 @@ export function DashboardPage() {
                     )}
                   />
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-[11px] font-medium tabular-nums text-ink-3">
+                    <span className="font-mono text-[9.5px] font-medium tracking-[0.01em] text-ink-3">
                       {formatDate(event.at)} · {formatTime(event.at)}
                     </span>
-                    <Badge tone="neutral" className="h-[18px] text-[10px]">
+                    <Badge tone="neutral" className="h-[18px] text-[9.5px]">
                       {event.category}
                     </Badge>
                     <SeverityBadge
                       tag={eventSeverityTag(event.severity)}
-                      className="h-[18px] text-[10px]"
+                      className="h-[18px] text-[9.5px]"
                     />
-                    <span className="ml-auto hidden text-[10.5px] text-ink-3 sm:block">
+                    <span className="ml-auto hidden font-mono text-[9px] text-ink-3 sm:block">
                       {event.evidenceIds.length} source{event.evidenceIds.length === 1 ? "" : "s"}
                     </span>
                   </div>
                   <button
                     onClick={() => event.evidenceIds[0] && openEvidence(event.evidenceIds[0])}
-                    className="group mt-0.5 flex w-full items-start gap-2 text-left"
+                    className="group mt-1 flex w-full items-start gap-2 text-left"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] font-medium transition-colors group-hover:text-accent">
+                      <span className="block font-serif text-[14px] font-medium leading-snug tracking-[-0.005em] transition-colors group-hover:text-accent">
                         {event.title}
                       </span>
                       <span className="mt-0.5 line-clamp-1 block text-[11.5px] text-ink-2">
                         {event.description}
                       </span>
                     </span>
-                    <ArrowUpRight className="mt-0.5 h-3 w-3 shrink-0 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                    <ArrowUpRight className="mt-1 h-3 w-3 shrink-0 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" />
                   </button>
                 </li>
               ))}
@@ -442,15 +466,15 @@ export function DashboardPage() {
           <CardContent className="mt-3 space-y-3">
             {pipeline.slice(0, 5).map((stage) => (
               <div key={stage.label}>
-                <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
                   <span className="truncate text-[11.5px] font-medium">{stage.label}</span>
                   <span
                     className={cn(
-                      "shrink-0 text-[10px] font-medium",
+                      "shrink-0 font-mono text-[9.5px] font-medium",
                       stage.state === "done" ? "text-success" : "text-ink-2",
                     )}
                   >
-                    {stage.state === "done" ? "Complete" : `${stage.progress}%`}
+                    {stage.state === "done" ? "complete" : `${stage.progress}%`}
                   </span>
                 </div>
                 <Progress value={stage.progress} tone={stage.state === "done" ? "success" : "accent"} />
@@ -458,7 +482,7 @@ export function DashboardPage() {
             ))}
             <button
               onClick={() => navigate("vault")}
-              className="flex w-full items-center justify-between rounded-lg border border-line px-3 py-2 text-left transition-colors hover:bg-surface-2"
+              className="flex w-full items-center justify-between rounded-[8px] border border-line px-3 py-2 text-left transition-colors hover:bg-surface-2"
             >
               <span className="text-[11px] text-ink-2">
                 {evidence.filter((e) => e.status === "processed").length} of {evidence.length} files searchable
@@ -489,13 +513,13 @@ export function DashboardPage() {
                   selectPerson(person.id);
                   navigate("people");
                 }}
-                className="flex items-center gap-2.5 rounded-xl border border-line px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                className="flex items-center gap-2.5 rounded-[8px] border border-line px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-surface-2"
               >
                 <PersonAvatar person={person} size="lg" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-medium">{person.name}</span>
+                  <span className="block truncate font-serif text-[14px] font-medium leading-tight">{person.name}</span>
                   <span className="mt-0.5 block truncate text-[10.5px] text-ink-2">{person.role}</span>
-                  <span className="mt-1 flex items-center gap-1.5 text-[10px] text-ink-3">
+                  <span className="mt-1 flex items-center gap-1.5 font-mono text-[9px] text-ink-3">
                     <span
                       className={cn(
                         "h-1.5 w-1.5 rounded-full",
@@ -528,30 +552,35 @@ export function DashboardPage() {
           <CardContent className="mt-2 px-3 pb-3">
             <div className="h-[132px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={intakeSeries} margin={{ top: 8, right: 4, left: -28, bottom: 0 }} barCategoryGap={18}>
-                  <CartesianGrid vertical={false} stroke="var(--line)" strokeDasharray="3 3" />
+                <BarChart data={intakeSeries} margin={{ top: 8, right: 4, left: -28, bottom: 0 }} barCategoryGap={22}>
+                  <CartesianGrid vertical={false} stroke="var(--line)" strokeDasharray="2 4" />
                   <XAxis
                     dataKey="day"
-                    tick={{ fontSize: 9.5, fill: "var(--text-3)" }}
+                    tick={{ fontSize: 9, fill: "var(--text-3)", fontFamily: "var(--font-mono)" }}
                     axisLine={false}
                     tickLine={false}
                     dy={4}
                   />
                   <Tooltip
-                    cursor={{ fill: "var(--surface-3)", radius: 3 }}
+                    cursor={{ fill: "var(--surface-3)", radius: 2 }}
                     contentStyle={{
                       background: "var(--surface)",
-                      border: "1px solid var(--line)",
-                      borderRadius: 10,
+                      border: "1px solid var(--line-strong)",
+                      borderRadius: 8,
                       fontSize: 11,
                       boxShadow: "var(--shadow-pop)",
                       padding: "6px 10px",
                     }}
-                    labelStyle={{ color: "var(--text-2)", fontSize: 10, marginBottom: 2 }}
+                    labelStyle={{
+                      color: "var(--text-3)",
+                      fontSize: 9,
+                      marginBottom: 2,
+                      fontFamily: "var(--font-mono)",
+                    }}
                     itemStyle={{ color: "var(--text)" }}
                     formatter={(value) => [`${value} files`, "Preserved"]}
                   />
-                  <Bar dataKey="files" fill="var(--accent)" radius={[4, 4, 2, 2]} maxBarSize={22} />
+                  <Bar dataKey="files" fill="var(--accent)" fillOpacity={0.88} radius={[2, 2, 0, 0]} maxBarSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -605,7 +634,7 @@ function InsightDialog({
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-ink-2">{insight.body}</p>
 
-        <p className="mb-1.5 mt-4 text-[10.5px] font-medium uppercase tracking-[0.05em] text-ink-3">
+        <p className="mb-1.5 mt-4 text-[11px] font-medium text-ink-3">
           Supporting evidence
         </p>
         <ul className="space-y-1">

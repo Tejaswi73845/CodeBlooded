@@ -17,7 +17,7 @@ export function DialogContent({
 }: ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] data-[state=open]:animate-fade-in dark:bg-black/60" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#14160f]/40 backdrop-blur-[3px] data-[state=open]:animate-fade-in dark:bg-black/65" />
       <DialogPrimitive.Content
         tabIndex={-1}
         onOpenAutoFocus={(e) => {
@@ -25,7 +25,7 @@ export function DialogContent({
           (e.currentTarget as HTMLElement).focus();
         }}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[18px] border border-line bg-surface shadow-pop focus:outline-none data-[state=open]:animate-scale-in",
+          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[16px] border border-line-strong/60 bg-surface shadow-pop focus:outline-none data-[state=open]:animate-scale-in",
           className,
         )}
         {...props}

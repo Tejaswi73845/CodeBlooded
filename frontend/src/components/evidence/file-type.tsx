@@ -14,25 +14,30 @@ export const typeMeta: Record<
   EvidenceType,
   { label: string; tint: string; icon: typeof FileText }
 > = {
-  image: { label: "Image", tint: "#007AFF", icon: ImageIcon },
-  document: { label: "PDF", tint: "#FF3B30", icon: FileText },
-  audio: { label: "Audio", tint: "#5E5CE6", icon: Music2 },
-  video: { label: "Video", tint: "#AF52DE", icon: Video },
-  chat: { label: "Chat", tint: "#34C759", icon: MessagesSquare },
-  data: { label: "Data", tint: "#FF9F0A", icon: FileSpreadsheet },
+  image: { label: "Image", tint: "#3f7f86", icon: ImageIcon },
+  document: { label: "PDF", tint: "#a2545c", icon: FileText },
+  audio: { label: "Audio", tint: "#6f6ba8", icon: Music2 },
+  video: { label: "Video", tint: "#9a6a84", icon: Video },
+  chat: { label: "Chat", tint: "#4f8a72", icon: MessagesSquare },
+  data: { label: "Data", tint: "#a97c34", icon: FileSpreadsheet },
 };
 
 export function FileTypeTile({ type, size = "md" }: { type: EvidenceType; size?: "sm" | "md" | "lg" }) {
   const meta = typeMeta[type];
   const Icon = meta.icon;
-  const dims = size === "sm" ? "h-8 w-8 rounded-lg" : size === "lg" ? "h-14 w-14 rounded-2xl" : "h-10 w-10 rounded-[10px]";
-  const iconSize = size === "sm" ? "h-3.5 w-3.5" : size === "lg" ? "h-6 w-6" : "h-4 w-4";
+  const dims =
+    size === "sm" ? "h-7 w-7 rounded-[6px]" : size === "lg" ? "h-12 w-12 rounded-[10px]" : "h-9 w-9 rounded-[8px]";
+  const iconSize = size === "sm" ? "h-3.5 w-3.5" : size === "lg" ? "h-[22px] w-[22px]" : "h-4 w-4";
   return (
     <span
       className={cn("inline-flex shrink-0 items-center justify-center", dims)}
-      style={{ backgroundColor: `${meta.tint}14`, color: meta.tint }}
+      style={{
+        backgroundColor: `${meta.tint}16`,
+        color: meta.tint,
+        boxShadow: `inset 0 0 0 1px ${meta.tint}20`,
+      }}
     >
-      <Icon className={iconSize} strokeWidth={1.8} />
+      <Icon className={iconSize} strokeWidth={1.7} />
     </span>
   );
 }

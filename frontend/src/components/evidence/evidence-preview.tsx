@@ -8,8 +8,8 @@ import { FileTypeTile, typeMeta } from "./file-type";
 
 function Chrome({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface-2">
-      <div className="flex items-center justify-between border-b border-line px-3 py-1.5 text-[10px] font-medium text-ink-3">
+    <div className="overflow-hidden rounded-[8px] border border-line bg-surface-2">
+      <div className="flex items-center justify-between border-b border-line px-3 py-1.5 font-mono text-[9px] text-ink-3">
         <span>{label}</span>
         <span className="inline-flex items-center gap-1">
           <span className="h-1.5 w-1.5 rounded-full bg-success" /> Preserved copy
@@ -59,15 +59,15 @@ export function EvidencePreview({ item }: { item: EvidenceItem }) {
           <FileTypeTile type={item.type} size="lg" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[11.5px] font-medium">{item.name}</p>
-            <p className="text-[10px] text-ink-3">
-              {typeMeta[item.type].label} · {formatBytes(item.size)}
+            <p className="font-mono text-[9px] text-ink-3">
+              {typeMeta[item.type].label.toLowerCase()} · {formatBytes(item.size)}
               {item.pages ? ` · ${item.pages} pages` : ""}
             </p>
           </div>
         </div>
-        <div className="mt-2.5 rounded-lg border border-line bg-surface p-2.5">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium text-ink-3">
-            <FileText className="h-3 w-3" /> Extracted text
+        <div className="mt-2.5 rounded-[6px] border border-line bg-surface p-2.5">
+          <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[9px] text-ink-3">
+            <FileText className="h-3 w-3" /> extracted text
           </div>
           {loading ? (
             <p className="text-[10.5px] text-ink-3">Loading…</p>

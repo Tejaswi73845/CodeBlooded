@@ -56,6 +56,10 @@ Serve `dist/` behind the same origin as the API, or set `VITE_API_URL` / reverse
 
 React 19 · TypeScript · Vite · Tailwind CSS v4 · Radix primitives · Lucide · React Flow (connection graph) · Recharts (dashboard chart). Components follow the shadcn-style structure in `src/components/ui`.
 
+## Design system
+
+The interface is art-directed as a working case file: stone-paper surfaces, ink text, an oxblood action colour and verdigris for verified states. **Newsreader** (serif) carries page titles, card headings and the report; **IBM Plex Sans** runs the interface; **IBM Plex Mono** is reserved for hashes, timestamps, case references and ledger data. Tokens, type scale, motion and both light/dark themes live in `src/index.css`; fonts are bundled locally via `@fontsource` (latin subsets) so the app does not depend on a font CDN.
+
 ## Structure
 
 ```
@@ -84,11 +88,12 @@ src/
 - List/grid views, search, type/status/person filters, sorting, per-file progress driven by real `GET /evidence/{id}/status` polling.
 - **Verify vault** re-hashes every original in the workspace, updates integrity badges and verifies the audit ledger, then reports counts. The drawer also has a per-item **Verify integrity** action.
 - Completed items missing capture details (date, location or people) are shown as **Needs review**; use the check action (list, grid or drawer) to **mark reviewed / skip**, or add the details first.
-- Each item carries a context-based **Critical / Attention / Normal** priority tag, aligned with timeline severity:
+- Processed items carry a context-based **Critical / Attention / Normal** priority tag, aligned with timeline severity:
   - **Critical** — threat, bullying, coercion, fraud or an integrity mismatch
-  - **Attention** — rude/angry/hostile language, a warning event, or capture details needing review
-  - **Normal** — everything else
-  The drawer shows an **AI evidence summary** with a regenerate action.
+  - **Attention** — rude/angry/hostile language or a warning event
+  - **Normal** — no risk signal detected
+  Review and failed states are communicated by their status badge instead of a duplicate priority tag.
+- The drawer shows an **AI evidence summary** with a regenerate action.
 - Drawer: real extracted text, capture metadata, integrity hash, linked people/events.
   - **Edit details** corrects date/location/people/note (`PATCH /evidence/{id}/capture`).
   - **Download** fetches the preserved original (`GET /evidence/{id}/download`).

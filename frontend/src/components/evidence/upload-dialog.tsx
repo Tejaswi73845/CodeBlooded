@@ -157,7 +157,7 @@ export function CaptureDialog({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              className="w-full resize-none rounded-[10px] border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent/60 focus:outline-none"
+              className="w-full resize-none rounded-[8px] border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] focus:border-accent/70 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent)] focus:outline-none"
               placeholder="e.g. Received from the complainant on WhatsApp."
             />
           </Field>
@@ -169,7 +169,7 @@ export function CaptureDialog({
               type="checkbox"
               checked={autoDetect}
               onChange={(e) => setAutoDetect(e.target.checked)}
-              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[color:var(--accent)]"
             />
             <span>
               Auto-detect missing details from the file

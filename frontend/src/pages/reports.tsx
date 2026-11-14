@@ -185,20 +185,20 @@ export function ReportsPage() {
         />
       </div>
 
-      <div className="print-hidden mb-3 rounded-card border border-line bg-surface p-3 shadow-card">
+      <div className="print-hidden mb-4 rounded-card border border-line bg-surface px-4 py-3 shadow-card">
         <div className="flex flex-wrap items-center gap-2">
           <ShieldCheck
             className={cn("h-3.5 w-3.5", disclosureReady ? "text-success" : "text-warning")}
           />
-          <h2 className="text-[12.5px] font-semibold">Disclosure check</h2>
+          <h2 className="font-serif text-[16px] font-medium">Disclosure check</h2>
           <Badge tone={disclosureReady ? "success" : "warning"} dot>
             {disclosureReady ? "Ready for disclosure" : "Needs review"}
           </Badge>
-          <span className="ml-auto text-[10.5px] text-ink-3">
+          <span className="ml-auto font-mono text-[9.5px] text-ink-3">
             {passedChecks}/{disclosureChecks.length} checks passed
           </span>
         </div>
-        <ul className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-2.5 grid gap-x-5 gap-y-2 border-t border-line pt-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {disclosureChecks.map((check) => (
             <li key={check.label} className="flex items-start gap-1.5 text-[11px]">
               {check.ok ? (
@@ -218,58 +218,58 @@ export function ReportsPage() {
           id="report-preview"
           className="print-area overflow-hidden rounded-card border border-line bg-surface shadow-card print:border-0 print:shadow-none"
         >
-          <div className="border-b border-line bg-surface-2/60 px-6 py-3 print:hidden">
+          <div className="border-b border-line bg-surface-2/50 px-6 py-3 print:hidden">
             <div className="flex flex-wrap items-center gap-2">
               <FileCheck2 className="h-3.5 w-3.5 text-ink-3" />
-              <span className="text-[11.5px] font-medium">Live preview</span>
-              <span className="text-[10.5px] text-ink-3">· {preview.title}</span>
-              <Badge tone="success" className="ml-auto">
-                Final
-              </Badge>
-              <Badge tone="neutral">Confidential</Badge>
+              <span className="font-mono text-[9.5px] text-ink-2">live preview</span>
+              <span className="hidden font-mono text-[9.5px] text-ink-3 sm:inline">· {preview.title}</span>
+              <span className="ml-auto flex items-center gap-1.5">
+                <Badge tone="success">Final</Badge>
+                <Badge tone="neutral">Confidential</Badge>
+              </span>
             </div>
           </div>
 
-          <div className="px-6 py-7 sm:px-10 sm:py-9">
-            <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-5">
+          <div className="px-6 py-8 sm:px-10 sm:py-10">
+            <header className="flex flex-wrap items-start justify-between gap-5 border-b border-line pb-6">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-ink text-surface">
-                    <ShieldCheck className="h-3 w-3" />
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent font-serif text-[13px] text-on-accent">
+                    V
                   </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-2">Veritas</span>
-                  <span className="text-[10px] text-ink-3">· Kestrel Legal</span>
+                  <span className="font-serif text-[15px] font-medium tracking-[-0.01em]">Veritas</span>
+                  <span className="font-mono text-[9px] text-ink-3">· Kestrel Legal</span>
                 </div>
-                <h2 className="mt-3 max-w-lg text-[21px] font-semibold leading-tight tracking-[-0.025em] sm:text-[24px]">
+                <h2 className="mt-4 max-w-lg font-serif text-[28px] font-normal leading-[1.08] tracking-[-0.02em] sm:text-[32px]">
                   {preview.title}
                 </h2>
-                <p className="mt-1.5 text-[11.5px] text-ink-2">
-                  Matter {preview.caseId} · Digital evidence intelligence report
+                <p className="mt-2 font-mono text-[9.5px] text-ink-2">
+                  Matter {preview.caseId} · digital evidence intelligence report
                 </p>
               </div>
-              <div className="text-left text-[10.5px] leading-relaxed text-ink-3 sm:text-right">
+              <div className="text-left text-[10px] leading-relaxed text-ink-3 sm:text-right">
                 <p>
                   Prepared for <span className="font-medium text-ink-2">{preview.preparedFor}</span>
                 </p>
                 <p>
                   Prepared by <span className="font-medium text-ink-2">{preview.preparedBy}</span>
                 </p>
-                <p>Generated {formatDateTime(preview.generatedAt)} IST</p>
+                <p className="font-mono">Generated {formatDateTime(preview.generatedAt)} IST</p>
               </div>
             </header>
 
-            <div className="mt-6 space-y-7">
+            <div className="mt-7 space-y-8">
               {sections.summary && (
                 <section>
                   <SectionTitle index="01" title="Incident summary" />
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] uppercase tracking-wide text-ink-3">Case type</span>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-[9px] tracking-[0.04em] text-ink-3">case type</span>
                     {analysis?.caseTypes?.length ? (
                       analysis.caseTypes.map((type) => (
                         <Badge
                           key={type.label}
-                          tone="danger"
-                          className="h-[19px] text-[10px] capitalize"
+                          tone="accent"
+                          className="h-[19px] text-[9.5px] capitalize"
                         >
                           {type.label} · {Math.round(type.confidence * 100)}%
                         </Badge>
@@ -280,30 +280,30 @@ export function ReportsPage() {
                       </span>
                     )}
                     {analysis?.caseTypes?.length ? (
-                      <span className="text-[9.5px] text-ink-3">
-                        {analysis.mode === "ai" ? "AI-classified" : "Keyword-classified"}
+                      <span className="font-mono text-[9px] text-ink-3">
+                        {analysis.mode === "ai" ? "ai-classified" : "keyword-classified"}
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-2.5 space-y-2.5">
+                  <div className="mt-3 space-y-3">
                     {(analysis?.summary ? [analysis.summary] : preview.summary).map((p, i) => (
-                      <p key={i} className="whitespace-pre-line text-[12.5px] leading-[1.75] text-ink-2">
+                      <p key={i} className="max-w-[74ch] whitespace-pre-line font-serif text-[13.5px] leading-[1.75] text-ink-2">
                         {p}
                       </p>
                     ))}
                     {analysisLoading && !analysis && (
-                      <p className="text-[11px] text-ink-3">Generating detailed case summary…</p>
+                      <p className="font-mono text-[9.5px] text-ink-3">generating detailed case summary…</p>
                     )}
                   </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="mt-4 grid divide-y divide-line rounded-[8px] border border-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                     {[
                       ["Total size", formatBytes(evidence.reduce((sum, item) => sum + item.size, 0))],
                       ["People", `${people.length} identified`],
                       ["Evidence items", `${evidence.length} preserved`],
                     ].map(([k, v]) => (
-                      <div key={k} className="rounded-lg border border-line bg-surface-2 px-3 py-2">
-                        <p className="text-[9.5px] uppercase tracking-wide text-ink-3">{k}</p>
-                        <p className="mt-0.5 text-[12.5px] font-semibold tabular-nums">{v}</p>
+                      <div key={k} className="px-3 py-2">
+                        <p className="font-mono text-[8.5px] text-ink-3">{k}</p>
+                        <p className="mt-0.5 font-serif text-[14px] font-medium tabular-nums">{v}</p>
                       </div>
                     ))}
                   </div>
@@ -358,7 +358,7 @@ export function ReportsPage() {
                   <div className="mt-2.5 overflow-hidden rounded-lg border border-line">
                     <table className="w-full border-collapse text-left">
                       <thead>
-                        <tr className="bg-surface-2 text-[9.5px] uppercase tracking-wide text-ink-3">
+                        <tr className="bg-surface-2/60 text-[9px] font-medium text-ink-3">
                           <th className="px-3 py-1.5 font-medium">Date / time</th>
                           <th className="px-3 py-1.5 font-medium">Event</th>
                           <th className="hidden px-3 py-1.5 font-medium sm:table-cell">Category</th>
@@ -404,7 +404,7 @@ export function ReportsPage() {
                   <div className="mt-2.5 overflow-hidden rounded-lg border border-line">
                     <table className="w-full border-collapse text-left">
                       <thead>
-                        <tr className="bg-surface-2 text-[9.5px] uppercase tracking-wide text-ink-3">
+                        <tr className="bg-surface-2/60 text-[9px] font-medium text-ink-3">
                           <th className="px-3 py-1.5 font-medium">Name</th>
                           <th className="px-3 py-1.5 font-medium">Role</th>
                           <th className="hidden px-3 py-1.5 font-medium sm:table-cell">Contact</th>
@@ -441,7 +441,7 @@ export function ReportsPage() {
                   <div className="mt-2.5 overflow-hidden rounded-lg border border-line">
                     <table className="w-full border-collapse text-left">
                       <thead>
-                        <tr className="bg-surface-2 text-[9.5px] uppercase tracking-wide text-ink-3">
+                        <tr className="bg-surface-2/60 text-[9px] font-medium text-ink-3">
                           <th className="px-3 py-1.5 font-medium">Reference</th>
                           <th className="hidden px-3 py-1.5 font-medium sm:table-cell">Type</th>
                           <th className="px-3 py-1.5 font-medium">SHA-256</th>
@@ -452,7 +452,7 @@ export function ReportsPage() {
                         {evidence.slice(0, 10).map((item) => (
                           <tr key={item.id} className="border-t border-line">
                             <td className="max-w-[220px] truncate px-3 py-1.5 text-[10px] font-medium">{item.name}</td>
-                            <td className="hidden px-3 py-1.5 text-[10px] uppercase text-ink-3 sm:table-cell">
+                            <td className="hidden px-3 py-1.5 text-[10px] capitalize text-ink-3 sm:table-cell">
                               {item.type}
                             </td>
                             <td className="px-3 py-1.5 font-mono text-[9.5px] text-ink-2">
@@ -477,8 +477,8 @@ export function ReportsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-1.5 text-[9.5px] text-ink-3">
-                    Full register with 14 entries and custody timestamps supplied separately.
+                  <p className="mt-1.5 font-mono text-[9px] text-ink-3">
+                    Full register with {evidence.length} entries and custody timestamps supplied separately.
                   </p>
                 </section>
               )}
@@ -591,9 +591,9 @@ export function ReportsPage() {
 
 function SectionTitle({ index, title }: { index: string; title: string }) {
   return (
-    <div className="flex items-baseline gap-2 border-b border-line pb-1.5">
-      <span className="font-mono text-[9.5px] text-ink-3">{index}</span>
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2">{title}</h3>
+    <div className="flex items-baseline gap-3 border-b border-line pb-2">
+      <span className="font-mono text-[9px] text-accent">{index}</span>
+      <h3 className="font-serif text-[17px] font-medium leading-none tracking-[-0.01em]">{title}</h3>
     </div>
   );
 }

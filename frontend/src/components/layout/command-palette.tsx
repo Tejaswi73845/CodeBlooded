@@ -199,7 +199,7 @@ export function CommandPalette() {
           )}
           {groups.map(([group, items]) => (
             <div key={group} className="mb-1">
-              <p className="px-2.5 pb-1 pt-2 text-[10.5px] font-medium uppercase tracking-[0.06em] text-ink-3">
+              <p className="px-2.5 pb-1 pt-2 text-[10.5px] font-medium text-ink-3">
                 {group}
               </p>
               {items.map((item) => (
@@ -209,14 +209,14 @@ export function CommandPalette() {
                   onClick={item.run}
                   onMouseEnter={() => setCursor(item.index)}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors",
+                    "flex w-full items-center gap-2.5 rounded-[7px] px-2.5 py-1.5 text-left transition-colors",
                     cursor === item.index ? "bg-surface-3" : "hover:bg-surface-2",
                   )}
                 >
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center">{item.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12.5px] font-medium">{item.label}</span>
-                    {item.meta && <span className="block truncate text-[11px] text-ink-3">{item.meta}</span>}
+                    {item.meta && <span className="block truncate font-mono text-[9.5px] text-ink-3">{item.meta}</span>}
                   </span>
                   {cursor === item.index ? (
                     <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-ink-3" />
@@ -228,7 +228,7 @@ export function CommandPalette() {
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-4 border-t border-line bg-surface-2 px-4 py-2 text-[10.5px] text-ink-3">
+        <div className="flex items-center gap-4 border-t border-line bg-surface-2 px-4 py-2 font-mono text-[9px] text-ink-3">
           <span className="inline-flex items-center gap-1">
             <kbd className="rounded border border-line bg-surface px-1 font-sans">↑</kbd>
             <kbd className="rounded border border-line bg-surface px-1 font-sans">↓</kbd> navigate

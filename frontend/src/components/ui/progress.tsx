@@ -16,9 +16,9 @@ export function Progress({
     danger: "bg-danger",
   };
   return (
-    <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-surface-3", className)}>
+    <div className={cn("h-[4px] w-full overflow-hidden rounded-full bg-surface-3", className)}>
       <div
-        className={cn("h-full rounded-full transition-[width] duration-300 ease-out", bars[tone])}
+        className={cn("h-full rounded-full transition-[width] duration-500 ease-out", bars[tone])}
         style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
       />
     </div>

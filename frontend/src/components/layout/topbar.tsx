@@ -57,20 +57,20 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
         ref={ref}
         role="dialog"
         aria-label="Notifications"
-        className="absolute right-0 top-[calc(100%+8px)] z-50 w-[344px] overflow-hidden rounded-[14px] border border-line bg-surface shadow-pop data-[state=open]:animate-scale-in"
+        className="absolute right-0 top-[calc(100%+8px)] z-50 w-[352px] overflow-hidden rounded-[12px] border border-line-strong/60 bg-surface shadow-pop data-[state=open]:animate-scale-in"
       >
         <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold">Notifications</span>
+            <span className="font-serif text-[16px] font-medium">Notifications</span>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-accent-soft px-1.5 text-[10.5px] font-semibold text-accent">
+              <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 font-mono text-[9.5px] font-medium text-accent">
                 {unreadCount}
               </span>
             )}
           </div>
           <button
             onClick={markAllRead}
-            className="text-[11.5px] font-medium text-accent hover:underline"
+            className="text-[11px] font-medium text-accent hover:underline"
           >
             Mark all read
           </button>
@@ -87,17 +87,17 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => markRead(n.id)}
                 className={cn(
                   "flex w-full gap-2.5 border-b border-line px-3.5 py-3 text-left transition-colors last:border-0 hover:bg-surface-2",
-                  !n.read && "bg-accent-soft/30",
+                  !n.read && "bg-accent-soft/25",
                 )}
               >
                 <span
                   className={cn(
-                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border",
                     n.kind === "integrity"
-                      ? "bg-danger/10 text-danger"
+                      ? "border-danger/20 bg-danger/10 text-danger"
                       : n.kind === "insight"
-                        ? "bg-warning/12 text-warning"
-                        : "bg-accent-soft text-accent",
+                        ? "border-warning/20 bg-warning/10 text-warning"
+                        : "border-accent/15 bg-accent-soft text-accent",
                   )}
                 >
                   <Icon className="h-3 w-3" />
@@ -112,7 +112,7 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
                   <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug text-ink-2">
                     {n.body}
                   </span>
-                  <span className="mt-1 block text-[10.5px] text-ink-3">{timeAgo(n.at)}</span>
+                  <span className="mt-1 block font-mono text-[9.5px] text-ink-3">{timeAgo(n.at)}</span>
                 </span>
               </button>
             );
@@ -121,7 +121,7 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
         <div className="border-t border-line px-3.5 py-2">
           <button
             onClick={onClose}
-            className="w-full text-center text-[11.5px] font-medium text-ink-2 hover:text-ink"
+            className="w-full text-center text-[11px] font-medium text-ink-2 hover:text-ink"
           >
             Close
           </button>
@@ -137,7 +137,7 @@ export function Topbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface/85 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/70 sm:px-6 print:hidden">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-bg/65 sm:px-6 print:hidden">
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation">
@@ -147,33 +147,35 @@ export function Topbar() {
         <SheetContent
           title="Navigation"
           headerless
-          className="max-w-[260px] bg-surface p-0"
+          className="max-w-[264px] bg-surface p-0"
         >
           <SidebarContent onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[12.5px]">
-        <span className="hidden truncate text-ink-2 sm:inline">{workspace.name}</span>
-        <ChevronRight className="hidden h-3 w-3 shrink-0 text-ink-3 sm:inline" />
-        <span className="truncate font-medium">{titles[view]}</span>
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2">
+        <span className="hidden max-w-[180px] truncate text-[11.5px] text-ink-3 md:inline">{workspace.name}</span>
+        <ChevronRight className="hidden h-3 w-3 shrink-0 text-ink-3 md:inline" />
+        <span className="truncate font-serif text-[17px] font-medium leading-none tracking-[-0.01em]">
+          {titles[view]}
+        </span>
       </nav>
 
-      <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
+      <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
         <button
           onClick={() => setSearchOpen(true)}
-          className="group hidden h-8 items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2 sm:flex"
+          className="group hidden h-8 items-center gap-2 rounded-[8px] border border-line bg-surface px-2.5 text-ink-3 shadow-[inset_0_1px_0_rgba(25,28,24,0.02)] transition-colors hover:border-line-strong hover:text-ink-2 sm:flex"
           aria-label="Search workspace"
         >
           <Search className="h-3.5 w-3.5" />
-          <span className="w-[116px] text-left text-[12px]">Search…</span>
-          <kbd className="rounded border border-line bg-surface px-1 py-px font-sans text-[10px] text-ink-3">
+          <span className="w-[118px] text-left text-[11.5px]">Search case</span>
+          <kbd className="rounded-[4px] border border-line bg-surface-2 px-1 py-px font-mono text-[9.5px] text-ink-3">
             ⌘K
           </kbd>
         </button>
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-3 sm:hidden"
+          className="flex h-8 w-8 items-center justify-center rounded-[8px] text-ink-2 hover:bg-surface-3 sm:hidden"
           aria-label="Search workspace"
         >
           <Search className="h-4 w-4" />
@@ -181,7 +183,7 @@ export function Topbar() {
 
         <button
           onClick={toggleTheme}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink"
+          className="flex h-8 w-8 items-center justify-center rounded-[8px] text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink"
           aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
         >
           {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
@@ -191,7 +193,7 @@ export function Topbar() {
           <button
             onClick={() => setNotificationsOpen((o) => !o)}
             className={cn(
-              "relative flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink",
+              "relative flex h-8 w-8 items-center justify-center rounded-[8px] text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink",
               notificationsOpen && "bg-surface-3 text-ink",
             )}
             aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
@@ -199,7 +201,7 @@ export function Topbar() {
           >
             <Bell className="h-4 w-4" />
             {unreadCount > 0 && (
-              <span className="absolute right-[6px] top-[6px] h-[6px] w-[6px] rounded-full bg-danger ring-2 ring-surface" />
+              <span className="absolute right-[6px] top-[6px] h-[6px] w-[6px] rounded-full bg-accent ring-2 ring-bg" />
             )}
           </button>
           {notificationsOpen && <NotificationsPanel onClose={() => setNotificationsOpen(false)} />}
@@ -213,7 +215,7 @@ export function Topbar() {
               className="flex h-8 items-center gap-2 rounded-full pl-0.5 pr-1 transition-colors hover:bg-surface-2"
               aria-label="Account menu"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[10.5px] font-semibold text-white">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent font-mono text-[9.5px] font-medium text-on-accent">
                 {workspace.analystInitials}
               </span>
             </button>
@@ -222,36 +224,36 @@ export function Topbar() {
             <DropdownMenu.Content
               align="end"
               sideOffset={8}
-              className="z-50 w-[230px] rounded-xl border border-line bg-surface p-1 shadow-pop data-[state=open]:animate-scale-in"
+              className="z-50 w-[236px] rounded-[10px] border border-line-strong/60 bg-surface p-1 shadow-pop data-[state=open]:animate-scale-in"
             >
               <div className="px-2.5 py-2">
                 <p className="text-[12.5px] font-medium">{user?.name ?? workspace.analyst}</p>
-                <p className="text-[11px] text-ink-3">{user?.email ?? "not signed in"}</p>
+                <p className="mt-0.5 truncate font-mono text-[10px] text-ink-3">{user?.email ?? "not signed in"}</p>
               </div>
               <DropdownMenu.Separator className="my-1 h-px bg-line" />
               <DropdownMenu.Item
                 onSelect={() => toast("Profile", "Profile management is available in Settings.")}
-                className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
+                className="flex cursor-default items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
               >
                 <UserRound className="h-3.5 w-3.5 text-ink-3" /> Profile
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 onSelect={() => navigate("settings")}
-                className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
+                className="flex cursor-default items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
               >
                 <Settings className="h-3.5 w-3.5 text-ink-3" /> Settings
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 onSelect={() => setSearchOpen(true)}
-                className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
+                className="flex cursor-default items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
               >
                 <Search className="h-3.5 w-3.5 text-ink-3" /> Search
-                <kbd className="ml-auto font-sans text-[10px] text-ink-3">⌘K</kbd>
+                <kbd className="ml-auto font-mono text-[10px] text-ink-3">⌘K</kbd>
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-line" />
               <DropdownMenu.Item
                 onSelect={() => void signOut()}
-                className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-danger outline-none data-[highlighted]:bg-danger/10"
+                className="flex cursor-default items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-[12.5px] text-danger outline-none data-[highlighted]:bg-danger/10"
               >
                 <LogOut className="h-3.5 w-3.5" /> Sign out
               </DropdownMenu.Item>

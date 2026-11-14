@@ -1,45 +1,69 @@
+@import "@fontsource-variable/newsreader/opsz.css";
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --bg: #f5f5f7;
-  --surface: #ffffff;
-  --surface-2: #fafafa;
-  --surface-3: #f0f0f2;
-  --text: #1d1d1f;
-  --text-2: #86868b;
-  --text-3: #a1a1a6;
-  --line: #e5e5ea;
-  --line-strong: #d2d2d7;
-  --accent: #007aff;
-  --accent-soft: #e8f1ff;
-  --success: #34c759;
-  --warning: #ff9f0a;
-  --danger: #ff3b30;
-  --violet: #5e5ce6;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.03);
-  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  /* Stone paper + ink: an archival case-file palette. */
+  --bg: #e8e9e3;
+  --surface: #f7f7f2;
+  --surface-2: #eeefe7;
+  --surface-3: #e0e2d8;
+  --text: #191c18;
+  --text-2: #596057;
+  --text-3: #6f766b;
+  --line: #d4d7cc;
+  --line-strong: #bdc1b5;
+
+  /* Wax-seal oxblood for action; verdigris for verified; ochre for caution. */
+  --accent: #7a2e36;
+  --accent-strong: #61242b;
+  --accent-soft: #f1e3df;
+  --on-accent: #fdf7f2;
+  --success: #2f6b56;
+  --success-soft: #e1ece5;
+  --warning: #8c601c;
+  --warning-soft: #f3e8d2;
+  --danger: #9d2b2b;
+  --danger-soft: #f2dfdc;
+  --violet: #4e4c78;
+  --violet-soft: #e7e5f0;
+
+  --shadow-card: 0 1px 1px rgba(25, 28, 24, 0.04), 0 8px 22px -16px rgba(25, 28, 24, 0.35);
+  --shadow-pop: 0 24px 64px -24px rgba(21, 24, 19, 0.45), 0 2px 8px rgba(21, 24, 19, 0.08);
 }
 
 .dark {
-  --bg: #0a0a0b;
-  --surface: #1c1c1e;
-  --surface-2: #232325;
-  --surface-3: #2c2c2e;
-  --text: #f5f5f7;
-  --text-2: #98989d;
-  --text-3: #6e6e73;
-  --line: #2e2e31;
-  --line-strong: #3a3a3d;
-  --accent: #0a84ff;
-  --accent-soft: #0f2842;
-  --success: #30d158;
-  --warning: #ffd60a;
-  --danger: #ff453a;
-  --violet: #7d7aff;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 20px rgba(0, 0, 0, 0.25);
-  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --bg: #111310;
+  --surface: #1a1d19;
+  --surface-2: #21251f;
+  --surface-3: #2a2f28;
+  --text: #edecdf;
+  --text-2: #a8aea0;
+  --text-3: #868d7f;
+  --line: #2f342c;
+  --line-strong: #41473c;
+
+  --accent: #d0938b;
+  --accent-strong: #e3a9a1;
+  --accent-soft: #38231f;
+  --on-accent: #1a1d19;
+  --success: #86b9a0;
+  --success-soft: #1d2a24;
+  --warning: #d3a65f;
+  --warning-soft: #2e2718;
+  --danger: #e08c82;
+  --danger-soft: #35201d;
+  --violet: #aaa4d8;
+  --violet-soft: #262439;
+
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.3), 0 12px 28px -20px rgba(0, 0, 0, 0.9);
+  --shadow-pop: 0 28px 72px -28px rgba(0, 0, 0, 0.9), 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
@@ -53,23 +77,30 @@
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
   --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
 
   --shadow-card: var(--shadow-card);
   --shadow-pop: var(--shadow-pop);
 
-  --radius-card: 16px;
+  --radius-card: 14px;
 
-  --animate-fade-in: fade-in 0.25s ease-out both;
-  --animate-rise: rise 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  --animate-scale-in: scale-in 0.16s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+  --animate-rise: rise 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  --animate-scale-in: scale-in 0.18s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   --animate-shimmer: shimmer 1.8s linear infinite;
 }
 
@@ -78,11 +109,11 @@
   to { opacity: 1; }
 }
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.97); }
+  from { opacity: 0; transform: scale(0.975); }
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes shimmer {
@@ -98,6 +129,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
   }
   body {
     background-color: var(--bg);
@@ -105,20 +137,20 @@
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.5;
-    font-feature-settings: "cv11", "ss01";
+    font-feature-settings: "kern", "liga";
   }
   ::selection {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
   }
   h1, h2, h3, h4 {
-    letter-spacing: -0.022em;
+    letter-spacing: -0.015em;
     font-weight: 600;
   }
   button, input, select, textarea {
     font: inherit;
   }
   :focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
     outline-offset: 2px;
   }
   ::-webkit-scrollbar {
@@ -143,6 +175,13 @@
 
 @utility hairline {
   border: 1px solid var(--line);
+}
+
+@utility docket-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  color: var(--text-3);
 }
 
 .skeleton {
@@ -180,14 +219,16 @@
     display: block !important;
     position: static !important;
     box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
     --bg: #fff;
     --surface: #fff;
-    --surface-2: #f6f6f7;
-    --surface-3: #f0f0f2;
+    --surface-2: #f6f6f3;
+    --surface-3: #efefea;
     --text: #111111;
     --text-2: #3a3a3c;
     --text-3: #6e6e73;
-    --line: #d9d9de;
+    --line: #d9d9d4;
   }
   .print-area section {
     break-inside: avoid;

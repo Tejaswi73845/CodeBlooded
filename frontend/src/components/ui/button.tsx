@@ -6,19 +6,20 @@ type Size = "sm" | "md" | "icon" | "lg";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-accent text-white shadow-[0_1px_2px_rgba(0,0,0,0.12)] hover:brightness-110 active:brightness-95",
+    "bg-accent text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_1px_2px_rgba(50,20,20,0.28)] hover:bg-accent-strong",
   secondary:
-    "bg-surface text-ink border border-line hover:bg-surface-2 active:bg-surface-3",
-  ghost: "text-ink-2 hover:text-ink hover:bg-surface-3/70",
-  danger: "bg-danger text-white hover:brightness-110",
-  soft: "bg-accent-soft text-accent hover:brightness-[0.97] dark:hover:brightness-110",
+    "border border-line-strong/70 bg-surface text-ink shadow-[0_1px_1px_rgba(25,28,24,0.03)] hover:border-line-strong hover:bg-surface-2",
+  ghost: "text-ink-2 hover:bg-surface-3/70 hover:text-ink",
+  danger:
+    "bg-danger text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(50,20,20,0.22)] hover:brightness-95",
+  soft: "bg-accent-soft text-accent hover:bg-accent-soft/75",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px] gap-1.5 rounded-lg",
-  md: "h-9 px-3.5 text-[13px] gap-2 rounded-[10px]",
-  lg: "h-11 px-5 text-sm gap-2 rounded-xl",
-  icon: "h-8 w-8 rounded-lg justify-center",
+  sm: "h-8 px-3 text-[12.5px] gap-1.5 rounded-[8px]",
+  md: "h-9 px-3.5 text-[13px] gap-2 rounded-[9px]",
+  lg: "h-11 px-5 text-[13.5px] gap-2 rounded-[10px]",
+  icon: "h-9 w-9 rounded-[9px] justify-center",
 };
 
 export function Button({
@@ -30,7 +31,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap font-medium transition-[background,color,filter,transform] duration-150 disabled:pointer-events-none disabled:opacity-45",
+        "inline-flex items-center justify-center whitespace-nowrap font-medium tracking-[-0.006em] transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-45",
         variants[variant],
         sizes[size],
         className,

@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { CaptureDialog } from "@/components/evidence/upload-dialog";
-import { PriorityBadge, evidencePriority } from "@/components/evidence/priority-badge";
+import { PriorityBadge, evidencePriority, shouldShowPriority } from "@/components/evidence/priority-badge";
 import { EvidencePreview } from "./evidence-preview";
 import { IntegrityBadge, StatusBadge, typeMeta } from "./file-type";
 import { PersonAvatar } from "@/components/person-avatar";
@@ -150,14 +150,16 @@ export function EvidenceDrawer() {
         <div className="space-y-5 px-5 py-5">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={item.status} />
-            <PriorityBadge priority={evidencePriority(item, events)} />
+            {shouldShowPriority(item.status) && (
+              <PriorityBadge priority={evidencePriority(item, events)} />
+            )}
             <IntegrityBadge integrity={item.integrity} />
             {item.id.startsWith("local-") && <Badge tone="accent">New intake</Badge>}
             <span className="ml-auto text-[11px] text-ink-3">{formatDate(item.uploadedAt)}</span>
           </div>
 
           {item.needsReview && (
-            <div className="rounded-xl border border-warning/30 bg-warning/10 p-3">
+            <div className="rounded-[8px] border border-warning/30 bg-warning/10 p-3">
               <p className="text-[11.5px] font-medium">Capture details need review</p>
               <p className="mt-1 text-[11px] leading-relaxed text-ink-2">
                 Missing: {item.missingCapture?.join(", ") || "capture details"}. Add them with
@@ -176,9 +178,9 @@ export function EvidenceDrawer() {
 
           <EvidencePreview item={item} />
 
-          <div className="rounded-xl border border-line bg-surface-2 p-3">
+          <div className="rounded-[8px] border border-line bg-surface-2 p-3">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
+              <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-accent">
                 <Sparkles className="h-3.5 w-3.5" /> AI evidence summary
               </div>
               <div className="flex items-center gap-1.5">
@@ -211,7 +213,7 @@ export function EvidenceDrawer() {
 
           <section>
             <div className="mb-2 flex items-center justify-between">
-              <h4 className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
+              <h4 className="text-[11px] font-medium text-ink-2">
                 Metadata
               </h4>
               <button
@@ -221,7 +223,7 @@ export function EvidenceDrawer() {
                 <Pencil className="h-3 w-3" /> Edit details
               </button>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-xl border border-line p-3.5">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-[8px] border border-line p-3.5">
               <Meta label="File type" value={`${meta.label} · ${item.mime.split("/")[1] ?? item.mime}`} />
               <Meta label="Size" value={formatBytes(item.size)} />
               <Meta label="Preserved" value={`${formatDate(item.uploadedAt)}, ${formatTime(item.uploadedAt)}`} />
@@ -259,12 +261,12 @@ export function EvidenceDrawer() {
 
           <section>
             <div className="mb-2 flex items-center justify-between">
-              <h4 className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
+              <h4 className="text-[11px] font-medium text-ink-2">
                 Integrity
               </h4>
               <IntegrityBadge integrity={item.integrity} />
             </div>
-            <div className="rounded-xl border border-line p-3.5">
+            <div className="rounded-[8px] border border-line p-3.5">
               <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink-2">
                 <Fingerprint className="h-3.5 w-3.5 text-ink-3" /> SHA-256
               </div>
@@ -302,7 +304,7 @@ export function EvidenceDrawer() {
 
           {linkedPeople.length > 0 && (
             <section>
-              <h4 className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
+              <h4 className="mb-2 text-[11px] font-medium text-ink-2">
                 People referenced
               </h4>
               <div className="flex flex-wrap gap-1.5">
@@ -327,10 +329,10 @@ export function EvidenceDrawer() {
 
           {linkedEvents.length > 0 && (
             <section>
-              <h4 className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
+              <h4 className="mb-2 text-[11px] font-medium text-ink-2">
                 Timeline events
               </h4>
-              <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+              <ul className="divide-y divide-line overflow-hidden rounded-[8px] border border-line">
                 {linkedEvents.map((e) => (
                   <li key={e.id}>
                     <button
@@ -353,7 +355,7 @@ export function EvidenceDrawer() {
           )}
 
           <section>
-            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">Tags</h4>
+            <h4 className="mb-2 text-[11px] font-medium text-ink-2">Tags</h4>
             <div className="flex flex-wrap gap-1.5">
               {item.tags.map((tag) => (
                 <Badge key={tag} tone="neutral">
@@ -363,7 +365,7 @@ export function EvidenceDrawer() {
             </div>
           </section>
 
-          <div className="flex items-center gap-1.5 border-t border-line pt-3 text-[10.5px] text-ink-3">
+          <div className="flex items-center gap-1.5 border-t border-line pt-3 font-mono text-[9px] text-ink-3">
             <Link2 className="h-3 w-3" /> Chain of custody: preserved → hashed → processed → reviewed
           </div>
         </div>

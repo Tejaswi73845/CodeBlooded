@@ -38,7 +38,9 @@ export function SettingsPage() {
   const [redact, setRedact] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState("30");
   const [style, setStyle] = useState<"concise" | "balanced" | "detailed">("balanced");
-  const [apiUrl, setApiUrl] = useState("https://api.veritas.local/v1");
+  const [apiUrl, setApiUrl] = useState(
+    () => import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : ""),
+  );
   const [testing, setTesting] = useState(false);
   const [connected, setConnected] = useState(true);
 
@@ -50,7 +52,7 @@ export function SettingsPage() {
     window.setTimeout(() => {
       setTesting(false);
       setConnected(true);
-      toast("FastAPI reachable", "GET /health returned 200 · schema v1.4.", "success");
+      toast("FastAPI reachable", "GET /api/health returned 200.", "success");
     }, 1100);
   };
 
@@ -66,7 +68,7 @@ export function SettingsPage() {
         }
       />
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -86,19 +88,19 @@ export function SettingsPage() {
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#F5F5F7] text-[#1D1D1F]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-[#E8E9E3] text-[#191C18]">
                     <Sun className="h-3.5 w-3.5" />
                   </span>
                   <span className="text-[12px] font-medium">Light</span>
                   {theme === "light" && <Check className="ml-auto h-3.5 w-3.5 text-accent" />}
                 </div>
-                <div className="mt-2.5 rounded-lg border border-[#E5E5EA] bg-[#F5F5F7] p-2">
+                <div className="mt-2.5 max-w-[260px] rounded-[7px] border border-[#D4D7CC] bg-[#E8E9E3] p-2">
                   <div className="flex gap-1.5">
-                    <div className="h-10 w-6 rounded bg-white" />
+                    <div className="h-10 w-6 rounded-[3px] bg-[#F7F7F2]" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-3 w-2/3 rounded bg-white" />
-                      <div className="h-2 w-full rounded bg-[#E5E5EA]" />
-                      <div className="h-2 w-4/5 rounded bg-[#E5E5EA]" />
+                      <div className="h-3 w-2/3 rounded-[2px] bg-[#F7F7F2]" />
+                      <div className="h-2 w-full rounded-[2px] bg-[#D4D7CC]" />
+                      <div className="h-2 w-4/5 rounded-[2px] bg-[#D4D7CC]" />
                     </div>
                   </div>
                 </div>
@@ -114,19 +116,19 @@ export function SettingsPage() {
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#1C1C1E] text-[#F5F5F7]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-[#1A1D19] text-[#EDECDF]">
                     <Moon className="h-3.5 w-3.5" />
                   </span>
                   <span className="text-[12px] font-medium">Dark</span>
                   {theme === "dark" && <Check className="ml-auto h-3.5 w-3.5 text-accent" />}
                 </div>
-                <div className="mt-2.5 rounded-lg border border-[#2E2E31] bg-[#0A0A0B] p-2">
+                <div className="mt-2.5 max-w-[260px] rounded-[7px] border border-[#2F342C] bg-[#111310] p-2">
                   <div className="flex gap-1.5">
-                    <div className="h-10 w-6 rounded bg-[#1C1C1E]" />
+                    <div className="h-10 w-6 rounded-[3px] bg-[#1A1D19]" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-3 w-2/3 rounded bg-[#1C1C1E]" />
-                      <div className="h-2 w-full rounded bg-[#2E2E31]" />
-                      <div className="h-2 w-4/5 rounded bg-[#2E2E31]" />
+                      <div className="h-3 w-2/3 rounded-[2px] bg-[#1A1D19]" />
+                      <div className="h-2 w-full rounded-[2px] bg-[#2F342C]" />
+                      <div className="h-2 w-4/5 rounded-[2px] bg-[#2F342C]" />
                     </div>
                   </div>
                 </div>
@@ -152,7 +154,7 @@ export function SettingsPage() {
           </CardHeader>
           <CardContent className="mt-3 space-y-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-[13px] font-semibold text-white">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent font-mono text-[12px] font-semibold text-on-accent">
                 {workspace.analystInitials}
               </span>
               <div>
@@ -285,7 +287,7 @@ export function SettingsPage() {
               <CardTitle>API integration</CardTitle>
             </div>
             <Badge tone={connected ? "success" : "warning"} dot>
-              {connected ? "Connected" : "Mock mode"}
+              {connected ? "Configured" : "Not reachable"}
             </Badge>
           </CardHeader>
           <CardContent className="mt-3 space-y-3">
@@ -295,12 +297,12 @@ export function SettingsPage() {
             <Field label="Workspace key">
               <Input value="sk_live_••••••••••••4f2a" readOnly className="font-mono text-[11.5px] text-ink-2" />
             </Field>
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={testConnection} disabled={testing}>
                 {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
                 {testing ? "Testing…" : "Test connection"}
               </Button>
-              <span className="text-[10.5px] text-ink-3">Mock data is served locally until the endpoint is live.</span>
+              <span className="text-[10.5px] text-ink-3">Requests are proxied through the API at <span className="font-mono">/api</span>.</span>
             </div>
           </CardContent>
         </Card>

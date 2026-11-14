@@ -23,7 +23,7 @@ export function SheetContent({
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/25 backdrop-blur-[1px] data-[state=open]:animate-fade-in dark:bg-black/55" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#14160f]/30 backdrop-blur-[2px] data-[state=open]:animate-fade-in dark:bg-black/60" />
       <DialogPrimitive.Content
         tabIndex={-1}
         onOpenAutoFocus={(e) => {
@@ -31,7 +31,7 @@ export function SheetContent({
           (e.currentTarget as HTMLElement).focus();
         }}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col border-l border-line bg-surface shadow-pop outline-none",
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col border-l border-line-strong/60 bg-surface shadow-pop outline-none",
           "data-[state=closed]:translate-x-full data-[state=open]:translate-x-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
           className,
         )}
@@ -43,9 +43,9 @@ export function SheetContent({
         </DialogPrimitive.Description>
         <div className={headerless ? "hidden" : "flex items-start justify-between gap-4 border-b border-line px-5 py-4"}>
           <div className="min-w-0">
-            <span className="block truncate text-[15px] font-semibold tracking-[-0.01em]">{title}</span>
+            <span className="block truncate text-[14.5px] font-semibold tracking-[-0.012em]">{title}</span>
             {description && (
-              <span className="mt-0.5 block truncate text-[12px] text-ink-2">{description}</span>
+              <span className="mt-0.5 block truncate text-[11.5px] text-ink-2">{description}</span>
             )}
           </div>
           <DialogPrimitive.Close

@@ -144,7 +144,7 @@ function mapIntegrity(value: string | undefined): EvidenceItem["integrity"] {
   return "pending";
 }
 
-const PERSON_TINTS = ["#5E5CE6", "#007AFF", "#34C759", "#FF9F0A", "#FF3B30", "#AF52DE", "#FF9500", "#64D2FF"];
+const PERSON_TINTS = ["#a2545c", "#4f8a72", "#6f6ba8", "#a97c34", "#5f7f92", "#9a6a84", "#3f7f86", "#8a7550"];
 
 const EVENT_CATEGORIES: Record<string, EventCategory> = {
   Communication: "Communication",

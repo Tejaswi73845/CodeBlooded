@@ -14,11 +14,11 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex items-start justify-between gap-4 px-5 pt-5", className)} {...props} />;
+  return <div className={cn("flex items-start justify-between gap-4 px-5 pt-[18px]", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("text-[15px] font-semibold tracking-[-0.01em]", className)} {...props} />;
+  return <h3 className={cn("font-serif text-[17px] font-medium leading-tight tracking-[-0.01em]", className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

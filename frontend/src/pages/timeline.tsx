@@ -39,11 +39,11 @@ const categories: { value: "all" | EventCategory; label: string }[] = [
 ];
 
 const categoryMeta: Record<EventCategory, { icon: typeof MessageSquare; tint: string }> = {
-  Communication: { icon: MessageSquare, tint: "#007AFF" },
-  Financial: { icon: Banknote, tint: "#34C759" },
-  Physical: { icon: Waypoints, tint: "#FF9F0A" },
-  Digital: { icon: MonitorSmartphone, tint: "#5E5CE6" },
-  Legal: { icon: Gavel, tint: "#86868B" },
+  Communication: { icon: MessageSquare, tint: "#7a2e36" },
+  Financial: { icon: Banknote, tint: "#2f6b56" },
+  Physical: { icon: Waypoints, tint: "#8c601c" },
+  Digital: { icon: MonitorSmartphone, tint: "#4e4c78" },
+  Legal: { icon: Gavel, tint: "#596057" },
 };
 
 const longDate = new Intl.DateTimeFormat("en-US", {
@@ -160,17 +160,17 @@ export function TimelinePage() {
 
       <div className="mb-4 rounded-card border border-line bg-surface p-3 shadow-card">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-[2px] rounded-[7px] border border-line bg-surface-2 p-[2px]">
             {categories.map((c) => (
               <button
                 key={c.value}
                 onClick={() => setCategory(c.value)}
                 aria-pressed={category === c.value}
                 className={cn(
-                  "h-7 rounded-full px-2.5 text-[11.5px] font-medium transition-colors",
+                  "h-6 rounded-[5px] px-2 text-[10.5px] font-medium transition-colors",
                   category === c.value
-                    ? "bg-ink text-surface"
-                    : "bg-surface-2 text-ink-2 hover:bg-surface-3 hover:text-ink",
+                    ? "border border-line bg-surface text-ink shadow-[0_1px_2px_rgba(25,28,24,0.06)]"
+                    : "border border-transparent text-ink-2 hover:text-ink",
                 )}
               >
                 {c.label}
@@ -179,13 +179,13 @@ export function TimelinePage() {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <label className="flex items-center gap-1.5 text-[11px] text-ink-3">
+            <label className="flex items-center gap-1.5 text-[10.5px] text-ink-3">
               Person
               <select
                 value={person}
                 onChange={(e) => setPerson(e.target.value)}
                 aria-label="Filter by person"
-                className="h-8 max-w-[160px] rounded-lg border border-line bg-surface px-2 text-[11.5px] text-ink outline-none"
+                className="h-8 max-w-[160px] rounded-[7px] border border-line bg-surface px-2 text-[11px] text-ink outline-none"
               >
                 <option value="all">Anyone</option>
                 {people.map((p) => (
@@ -195,7 +195,7 @@ export function TimelinePage() {
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-ink-3">
+            <label className="flex items-center gap-1.5 text-[10.5px] text-ink-3">
               From
               <input
                 type="date"
@@ -204,10 +204,10 @@ export function TimelinePage() {
                 max="2026-11-30"
                 onChange={(e) => setFrom(e.target.value)}
                 aria-label="Filter from date"
-                className="h-8 rounded-lg border border-line bg-surface px-2 text-[11.5px] text-ink outline-none"
+                className="h-8 rounded-[7px] border border-line bg-surface px-2 font-mono text-[10px] text-ink outline-none"
               />
             </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-ink-3">
+            <label className="flex items-center gap-1.5 text-[10.5px] text-ink-3">
               To
               <input
                 type="date"
@@ -216,7 +216,7 @@ export function TimelinePage() {
                 max="2026-11-30"
                 onChange={(e) => setTo(e.target.value)}
                 aria-label="Filter to date"
-                className="h-8 rounded-lg border border-line bg-surface px-2 text-[11.5px] text-ink outline-none"
+                className="h-8 rounded-[7px] border border-line bg-surface px-2 font-mono text-[10px] text-ink outline-none"
               />
             </label>
             {hasFilters && (
@@ -237,20 +237,20 @@ export function TimelinePage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-1 pb-3 text-[11px] text-ink-3">
+      <div className="flex items-center justify-between px-1 pb-3 font-mono text-[9.5px] text-ink-3">
         <span>
           {filtered.length} event{filtered.length === 1 ? "" : "s"} in view
           {person !== "all" && people.find((p) => p.id === person) ? ` · ${people.find((p) => p.id === person)!.name}` : ""}
         </span>
         <span className="inline-flex items-center gap-3">
           <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-danger" /> Critical
+            <span className="h-1.5 w-1.5 rounded-full bg-danger" /> critical
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Attention
+            <span className="h-1.5 w-1.5 rounded-full bg-warning" /> attention
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Normal
+            <span className="h-1.5 w-1.5 rounded-full bg-success" /> normal
           </span>
         </span>
       </div>
@@ -281,38 +281,40 @@ export function TimelinePage() {
         <div className="space-y-6">
           {groups.map(([day, dayEvents]) => (
             <section key={day} aria-label={longDate.format(new Date(`${day}T12:00:00`))}>
-              <div className="sticky top-14 z-10 -mx-1 mb-2 flex items-center gap-2 rounded-lg bg-bg/90 px-1 py-1.5 backdrop-blur-md">
-                <h2 className="text-[12.5px] font-semibold">{longDate.format(new Date(`${day}T12:00:00`))}</h2>
-                <span className="text-[11px] text-ink-3">
+              <div className="sticky top-14 z-10 -mx-1 mb-3 flex items-center gap-2.5 border-b border-line bg-bg/92 px-1 py-2 backdrop-blur-md">
+                <h2 className="font-serif text-[17px] font-medium leading-none tracking-[-0.01em]">
+                  {longDate.format(new Date(`${day}T12:00:00`))}
+                </h2>
+                <span className="font-mono text-[9.5px] text-ink-3">
                   {dayEvents.length} event{dayEvents.length === 1 ? "" : "s"}
                 </span>
                 {dayEvents.some((e) => e.severity === "critical") && (
-                  <Badge tone="danger" className="ml-1 h-[18px] text-[10px]">
+                  <Badge tone="danger" className="ml-1 h-[18px] text-[9.5px]">
                     <ShieldAlert className="mr-0.5 h-2.5 w-2.5" /> critical window
                   </Badge>
                 )}
               </div>
 
               <div className="relative">
-                <div className="absolute bottom-2 left-[76px] top-2 w-px bg-line sm:left-[92px]" aria-hidden />
-                <ol className="space-y-2.5">
+                <div className="absolute bottom-2 left-[84px] top-2 w-px bg-line sm:left-[102px]" aria-hidden />
+                <ol className="space-y-3">
                   {dayEvents.map((event) => {
                     const meta = categoryMeta[event.category];
                     const linkedPeople = people.filter((p) => event.personIds.includes(p.id));
                     const sources = evidence.filter((e) => event.evidenceIds.includes(e.id));
                     return (
-                      <li key={event.id} className="relative grid grid-cols-[56px_1fr] gap-3 sm:grid-cols-[70px_1fr] sm:gap-4">
-                        <div className="pt-3 text-right">
-                          <span className="block text-[12px] font-semibold tabular-nums tracking-tight">
+                      <li key={event.id} className="relative grid grid-cols-[64px_minmax(0,1fr)] gap-3 sm:grid-cols-[78px_minmax(0,1fr)] sm:gap-4">
+                        <div className="pt-3.5 text-right">
+                          <span className="block font-mono text-[12px] font-medium tabular-nums tracking-[-0.02em]">
                             {formatTime(event.at)}
                           </span>
-                          <span className="mt-0.5 block text-[9.5px] uppercase tracking-wide text-ink-3">
+                          <span className="mt-1 block font-mono text-[8.5px] uppercase tracking-[0.08em] text-ink-3">
                             IST
                           </span>
                         </div>
                         <span
                           className={cn(
-                            "absolute left-[72px] top-[19px] z-[1] h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface sm:left-[88px]",
+                            "absolute left-[80px] top-[20px] z-[1] h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface sm:left-[98px]",
                             event.severity === "critical"
                               ? "bg-danger"
                               : event.severity === "warning"
@@ -324,26 +326,26 @@ export function TimelinePage() {
                         <div
                           onClick={() => event.evidenceIds[0] && openEvidence(event.evidenceIds[0])}
                           className={cn(
-                            "cursor-pointer rounded-xl border border-line bg-surface p-3.5 shadow-card transition-all duration-200 hover:border-line-strong hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.05)]",
-                            event.severity === "critical" && "border-l-[3px] border-l-danger",
+                            "min-w-0 cursor-pointer rounded-[10px] border border-line bg-surface p-4 transition-colors duration-200 hover:border-line-strong hover:bg-surface-2/30",
+                            event.severity === "critical" && "border-l-2 border-l-danger",
                           )}
                         >
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                             <span
-                              className="flex h-5 w-5 items-center justify-center rounded-md"
-                              style={{ backgroundColor: `${meta.tint}14`, color: meta.tint }}
+                              className="flex h-5 w-5 items-center justify-center rounded-[5px]"
+                              style={{ backgroundColor: `${meta.tint}16`, color: meta.tint }}
                             >
                               <meta.icon className="h-3 w-3" />
                             </span>
-                            <Badge tone="neutral" className="h-[19px] text-[10px]">
+                            <Badge tone="neutral" className="h-[19px] text-[9.5px]">
                               {event.category}
                             </Badge>
                             <SeverityBadge
                               tag={eventSeverityTag(event.severity)}
-                              className="h-[19px] text-[10px]"
+                              className="h-[19px] text-[9.5px]"
                             />
                             {event.timeUncertain && (
-                              <Badge tone="neutral" className="h-[19px] text-[10px]">
+                              <Badge tone="neutral" className="h-[19px] text-[9.5px]">
                                 time uncertain
                               </Badge>
                             )}
@@ -352,7 +354,7 @@ export function TimelinePage() {
                                 clickEvent.stopPropagation();
                                 setEditing(event);
                               }}
-                              className="ml-auto inline-flex items-center gap-1 rounded-md border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                              className="ml-auto inline-flex items-center gap-1 rounded-[6px] border border-line bg-surface px-1.5 py-0.5 text-[9.5px] font-medium text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
                             >
                               <Pencil className="h-3 w-3" /> Edit
                             </button>
@@ -363,12 +365,12 @@ export function TimelinePage() {
                               e.stopPropagation();
                               event.evidenceIds[0] && openEvidence(event.evidenceIds[0]);
                             }}
-                            className="mt-2 block text-left text-[13.5px] font-semibold leading-snug transition-colors hover:text-accent"
+                            className="mt-2.5 block w-full break-words text-left font-serif text-[16.5px] font-medium leading-snug tracking-[-0.01em] transition-colors hover:text-accent"
                           >
                             {event.title}
                           </button>
 
-                          <div className="mt-2 rounded-lg border border-line bg-surface-2/60 p-2.5">
+                          <div className="mt-3 border-l-2 border-accent/25 pl-3">
                             <div className="flex items-center gap-1.5 text-[10px] font-medium text-accent">
                               <Sparkles className="h-3 w-3" /> AI summary
                             </div>
@@ -376,30 +378,30 @@ export function TimelinePage() {
                               {summaryFor(event.id, event.description, event.summary)}
                             </p>
                             {!event.summary && !summaries[event.id] && (
-                              <p className="mt-1 text-[10px] text-ink-3">Generating summary…</p>
+                              <p className="mt-1 font-mono text-[9px] text-ink-3">generating summary…</p>
                             )}
                           </div>
 
-                          <dl className="mt-2.5 grid gap-x-5 gap-y-1.5 border-t border-line pt-2.5 text-[11px] sm:grid-cols-2">
+                          <dl className="mt-3 grid gap-x-5 gap-y-2 border-t border-line pt-3 text-[11px] sm:grid-cols-2">
                             <div className="flex min-w-0 items-baseline gap-1.5">
-                              <dt className="shrink-0 text-ink-3">Date</dt>
-                              <dd className="truncate text-ink-2">{longDate.format(new Date(event.at))}</dd>
+                              <dt className="shrink-0 text-[10px] text-ink-3">Date</dt>
+                              <dd className="truncate text-[10.5px] text-ink-2">{longDate.format(new Date(event.at))}</dd>
                             </div>
                             <div className="flex min-w-0 items-baseline gap-1.5">
-                              <dt className="shrink-0 text-ink-3">Time</dt>
-                              <dd className="truncate text-ink-2">
+                              <dt className="shrink-0 text-[10px] text-ink-3">Time</dt>
+                              <dd className="truncate font-mono text-[10px] text-ink-2">
                                 {formatTime(event.at)}
                                 {event.atRaw ? ` · ${event.atRaw}` : ""}
                               </dd>
                             </div>
                             <div className="flex min-w-0 items-baseline gap-1.5">
-                              <dt className="flex shrink-0 items-center gap-1 text-ink-3">
+                              <dt className="flex shrink-0 items-center gap-1 text-[10px] text-ink-3">
                                 <MapPin className="h-3 w-3" /> Location
                               </dt>
-                              <dd className="truncate text-ink-2">{event.location ?? "Not recorded"}</dd>
+                              <dd className="truncate text-[10.5px] text-ink-2">{event.location ?? "Not recorded"}</dd>
                             </div>
                             <div className="flex min-w-0 items-baseline gap-1.5">
-                              <dt className="flex shrink-0 items-center gap-1 text-ink-3">
+                              <dt className="flex shrink-0 items-center gap-1 text-[10px] text-ink-3">
                                 <Users className="h-3 w-3" /> People
                               </dt>
                               <dd className="flex min-w-0 flex-wrap gap-1">
@@ -407,7 +409,7 @@ export function TimelinePage() {
                                   linkedPeople.map((p) => (
                                     <span
                                       key={p.id}
-                                      className="inline-flex items-center gap-1 rounded-full border border-line bg-surface py-0.5 pl-0.5 pr-2 text-[10px] text-ink-2"
+                                      className="inline-flex items-center gap-1 rounded-full border border-line bg-surface py-0.5 pl-0.5 pr-2 text-[9.5px] text-ink-2"
                                     >
                                       <PersonAvatar person={p} size="xs" />
                                       {p.name}
@@ -420,8 +422,8 @@ export function TimelinePage() {
                             </div>
                           </dl>
 
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1 border-t border-line pt-2.5">
-                            <span className="mr-1 text-[10px] text-ink-3">Sources</span>
+                          <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-line pt-3">
+                            <span className="mr-1 font-mono text-[9px] text-ink-3">sources</span>
                             {sources.map((item) => (
                               <button
                                 key={item.id}
@@ -429,15 +431,15 @@ export function TimelinePage() {
                                   e.stopPropagation();
                                   openEvidence(item.id);
                                 }}
-                                className="flex max-w-[220px] items-center gap-1.5 rounded-md border border-line bg-surface-2 py-0.5 pl-0.5 pr-1.5 transition-colors hover:border-line-strong hover:bg-surface-3"
+                                className="flex max-w-[220px] items-center gap-1.5 rounded-[5px] border border-line bg-surface-2 py-0.5 pl-0.5 pr-1.5 transition-colors hover:border-line-strong hover:bg-surface-3"
                                 title={item.name}
                               >
                                 <FileTypeTile type={item.type} size="sm" />
-                                <span className="truncate text-[10px] text-ink-2">{item.name}</span>
+                                <span className="truncate text-[9.5px] text-ink-2">{item.name}</span>
                               </button>
                             ))}
                             {sources.length === 0 && (
-                              <span className="text-[10px] text-ink-3">No supporting file</span>
+                              <span className="text-[9.5px] text-ink-3">No supporting file</span>
                             )}
                           </div>
                         </div>
