@@ -1,40 +1,139 @@
 # Veritas — TraceVault Frontend
 
-A production-style React interface for TraceVault, an AI-powered digital evidence platform. Organise preserved evidence, reconstruct an incident timeline, inspect entity relationships, ask grounded questions and assemble a court-ready report.
+React 19 + TypeScript interface for TraceVault. It is fully wired to the FastAPI backend: there is **no demo dataset** — evidence, people, timeline events, reports and audit entries all come from the API.
 
-Runs standalone with typed demo data; the FastAPI contract that replaces the demo store is documented in [`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTEGRATION.md).
+Screens: Dashboard · Evidence Vault · Timeline · People & Connections · AI Assistant · Reports · Audit · Settings.
+
+## Prerequisites
+
+Start the backend first (see [`../backend/README.md`](../backend/README.md)):
+
+```bash
+cd backend
+.venv\Scripts\activate
+uvicorn app.main:app --reload --port 8000
+```
 
 ## Run
 
 ```bash
 npm install
 npm run dev
-npm run build
 ```
 
-Open `http://localhost:5173`. Light appearance is the default; use the topbar toggle for dark.
+Open <http://localhost:5173>. Light theme is default; toggle dark from the topbar.
+
+### Backend connection
+
+In development, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so no client configuration is required:
+
+```ts
+server: {
+  proxy: {
+    "/api": { target: process.env.VITE_BACKEND_URL ?? "http://localhost:8000", changeOrigin: true },
+  },
+}
+```
+
+- Override the dev target: `VITE_BACKEND_URL=http://host:8000 npm run dev`
+- Build for another origin: set `VITE_API_URL=http://host:8000` in `frontend/.env.local`, then `npm run build` (baked at build time)
+- **Restart the dev server** after touching the proxy config.
+
+### Production build
+
+```bash
+npm run build     # tsc -b && vite build
+npm run preview   # serves dist/
+```
+
+Serve `dist/` behind the same origin as the API, or set `VITE_API_URL` / reverse-proxy `/api`.
 
 ## Stack
 
-React 19 · TypeScript · Vite · Tailwind CSS v4 · Radix primitives · Lucide · React Flow · Recharts. No UI-kit template: components live in `src/components/ui` in the shadcn style.
+React 19 · TypeScript · Vite · Tailwind CSS v4 · Radix primitives · Lucide · React Flow (connection graph) · Recharts (dashboard chart). Components follow the shadcn-style structure in `src/components/ui`.
 
 ## Structure
 
 ```
 src/
-  components/       layout, evidence, UI primitives
-  pages/            eight routes, state-driven
-  store/            app store: evidence, uploads, chat, theme, toasts
-  data/             typed realistic demo data
-  lib/              api seam, assistant mock, formatting
-  index.css         design tokens and global styles
-public/             favicon and static assets
+  components/
+    layout/        sidebar, topbar, command palette
+    evidence/      drawer, preview, upload/edit capture dialog, file tiles
+    ui/            button, dialog, sheet, input, badge, progress, toast…
+  pages/           dashboard, vault, timeline, people, assistant, reports, audit, settings
+  store/           app store: evidence/people/events/audit loading, uploads, chat, toasts, theme
+  lib/
+    api.ts         typed API client (all backend calls)
+    assistant.ts   chat helper + suggested prompts
+    workspace.ts   workspace labels (case name/analyst)
+    format.ts      date/size/hash formatting
+  data/types.ts    shared UI types
+  index.css        design tokens and global styles
 ```
 
-## Backend seam
+## What the UI does
 
-`src/lib/api.ts` is the integration point. Replace the mock implementations (`listEvidence`, `upload`, …) with calls to the TraceVault backend; the store and pages only depend on those signatures. Uploads already compute a real SHA-256 digest with Web Crypto before the item enters the vault.
+### Evidence Vault
 
-## Demo behaviour
+- Drag-and-drop or browse to upload. A **capture details** dialog collects date, time, location, people and a note — all optional.
+- **Auto-detect missing details from the file** (default on): the backend fills blanks after processing; detected fields are labelled in the drawer.
+- List/grid views, search, type/status/person filters, sorting, per-file progress driven by real `GET /evidence/{id}/status` polling.
+- Drawer: real extracted text, capture metadata, integrity hash, linked people/events.
+  - **Edit details** corrects date/location/people/note (`PATCH /evidence/{id}/capture`).
+  - **Download** fetches the preserved original (`GET /evidence/{id}/download`).
+  - **Remove** soft-deletes the item (original retained; audited).
 
-Search (`⌘K`), filters, drag-and-drop upload, evidence preview drawer, graph inspection, timeline filtering, assistant Q&A with citations, report generation and PDF export (via print), audit CSV export, notifications and theme switching all work against local mock state.
+### Dashboard
+
+Real counts, a 7-day intake chart computed from upload dates, processing pipeline derived from evidence statuses, recent evidence/events and an empty state for insights until data exists.
+
+### Timeline
+
+Events from `GET /timeline` (including capture events), grouped by day with category/person/date filters.
+
+### People & Connections
+
+Nodes from `GET /entities?type=person`; edges connect people who appear in the same evidence item. Nodes are clickable and link back to their evidence.
+
+### AI Assistant
+
+Grounded Q&A via `POST /assistant/chat` with source chips for citations. Answers degrade to labelled extractive mode when the AI provider is unavailable or out of balance; configuration is server-side.
+
+### Reports
+
+List from `GET /reports`; Generate calls `POST /reports/generate`; Export downloads `GET /reports/{id}/pdf`. The preview is composed from live evidence, people and timeline data.
+
+### Audit
+
+Append-only ledger from `GET /audit` with search/filter and CSV export.
+
+## Data flow
+
+All requests go through `src/lib/api.ts`:
+
+| Area | Endpoint(s) |
+|---|---|
+| Evidence list/detail/status | `GET /evidence`, `/evidence/{id}`, `/evidence/{id}/status` |
+| Upload (with capture metadata) | `POST /evidence/upload` (multipart) |
+| Edit capture details | `PATCH /evidence/{id}/capture` |
+| Download / delete | `GET /evidence/{id}/download`, `DELETE /evidence/{id}` |
+| People / graph | `GET /entities` |
+| Timeline | `GET /timeline` |
+| Assistant | `POST /assistant/chat` |
+| Reports | `GET /reports`, `POST /reports/generate`, `GET /reports/{id}/pdf` |
+| Audit | `GET /audit` |
+
+API responses are camelCase with UTC (`Z`) timestamps. Errors use `{ error: { code, message, details, requestId } }`; the UI surfaces `message` in toasts.
+
+## Notes
+
+- No mock fallback: if the backend is unreachable, lists are empty and uploads/downloads show an error toast.
+- Images uploaded in-session preview from a browser object URL; other files show their extracted text.
+- PDF export uses the server-rendered report when available and falls back to browser print.
+- Upload/edit dialogs are scrollable (`max-h-[85dvh]`).
+
+## Checks
+
+```bash
+npm run build      # TypeScript project build + production bundle
+```

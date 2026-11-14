@@ -1,185 +1,95 @@
-# Connecting the TraceVault frontend
+# Frontend ↔ Backend Contract (implemented)
 
-The existing React app in `frontend/` is intentionally untouched. Its data lives in `frontend/src/store/app-store.tsx` with mock seed data in `frontend/src/data/mock.ts`. This document maps that UI onto the backend contract without redesigning anything.
+The React app in `frontend/` is wired to the FastAPI backend. This document records the current request/response mapping and conventions. There is no mock dataset.
 
-## 1. Configure the API URL
+## Connection
 
-Create `frontend/.env.local`:
+- **Dev:** Vite proxies `/api` → `http://localhost:8000` (`VITE_BACKEND_URL` overrides the target).
+- **Build/preview:** set `VITE_API_URL` (e.g. `http://host:8000`), or reverse-proxy `/api` to the backend.
+- Backend CORS allows localhost ports plus anything in `CORS_ORIGINS`.
+- All responses are camelCase; timestamps are UTC and end in `Z`.
+- Errors use one envelope:
 
+```json
+{ "error": { "code": "…", "message": "…", "details": {}, "requestId": "…" } }
 ```
-VITE_API_URL=http://127.0.0.1:8000/api
-```
 
-Backend CORS already allows `http://localhost:5173`, `http://127.0.0.1:5173`, any localhost port, and additional origins from `CORS_ORIGINS`.
+## Evidence
 
-## 2. Field mapping
+`GET /api/evidence` → `EvidenceItem` fields used by the UI:
 
-### Evidence — `GET /api/evidence`
-
-The backend returns camelCase fields matching the frontend `EvidenceItem`:
-
-| Frontend (`frontend/src/data/types.ts`) | Backend |
+| UI (`src/data/types.ts`) | Backend |
 |---|---|
 | `id` | `id` (UUID) |
-| `name` | `name` |
-| `type` (`image \| document \| audio \| video \| chat \| data`) | `type` (same values) |
-| `mime` | `mime` |
-| `size` | `size` |
-| `uploadedAt` | `uploadedAt` (UTC, ends in `Z`) |
-| `uploadedBy` | `uploadedBy` |
-| `source` | `source` (`"Upload"`) |
+| `name`, `type`, `mime`, `size` | same |
+| `uploadedAt`, `uploadedBy`, `source` | same (UTC `Z`) |
 | `hash` | `hash` (SHA-256) |
-| `tags` | `tags` |
-| `personIds` | `personIds` (backend entity UUIDs) |
-| `eventIds` | `eventIds` |
-| `duration` / `pages` / `preview` | same |
-| `note` | `note` (extraction summary) |
-| `duplicateOf` | `duplicateOf` |
-| `integrity` | `integrity` (`verified \| pending \| mismatch`) |
-| `status` | `status` |
+| `status` | backend `status` mapped: `pending → queued`, `processing`, `completed → processed`, `failed` |
+| `integrity` | `verified \| pending \| mismatch` |
+| `personIds` | array of backend entity UUIDs |
+| `tags`, `note`, `preview`, `pages`, `duration` | same |
+| `occurredAt`, `location`, `persons`, `captureNote`, `captureDetected` | capture metadata (+ which fields were auto-detected) |
 
-Map the processing status for the existing badges:
+`GET /api/evidence/{id}/status` → `{ status, stage, progress, error, integrity, verifiedAt }` (polled every 2 s while processing).
 
-```ts
-const status = {
-  pending: "queued",
-  processing: "processing",
-  completed: "processed",
-  failed: "failed",
-} as const;
-```
+## Upload with capture metadata
 
-`GET /api/evidence` also returns `counts` (per backend status) for dashboard cards, and `total`/`limit`/`offset`.
+`POST /api/evidence/upload` — `multipart/form-data`:
 
-### People — `GET /api/entities?type=person`
+| Field | Type | Notes |
+|---|---|---|
+| `files` | file[] | one or more files |
+| `date` | `YYYY-MM-DD` | optional |
+| `time` | `HH:MM` | optional |
+| `location` | string | optional |
+| `persons` | JSON array string | e.g. `["Ravi Kulkarni"]` |
+| `note` | string | optional |
+| `autoDetect` | `"true"` / `"false"` | fill blank capture fields from the file after processing |
 
-Map an entity to the frontend `Person`:
+Response: `{ items: EvidenceSummary[], duplicates: [], errors: [], accepted: n }` (HTTP 202). Items are real backend records; the UI prepends the returned item and then polls status.
 
-```ts
-{
-  id: entity.id,
-  name: entity.value,
-  role: entity.type === "person" ? "Person of interest" : entity.type,
-  initials: entity.value.split(/\s+/).map(v => v[0]).slice(0,2).join("").toUpperCase(),
-  tint: "#5E5CE6",
-  risk: "medium",             // no inferred risk; do not fabricate one
-  phone: related phone entity, // optional, via /entities/{id}.relatedEntities
-  email: related email entity,
-  evidenceCount: entity.evidenceCount,
-  lastSeen: entity.lastSeenAt,
-  note: `Mentioned ${entity.mentionCount} times across ${entity.evidenceCount} evidence items.`,
-}
-```
+### Editing capture details
 
-Do not derive risk levels from AI guesses. If the UI needs risk, keep it analyst-assigned.
-
-### Timeline — `GET /api/timeline`
-
-Returns items with `at`, `atRaw`, `timeUncertain`, `title`, `description`, `category`, `severity`, `evidenceId`, `evidenceIds`, `evidenceName`, `personIds`, `people`, and page/timestamp locators. The frontend's `IncidentEvent` shape is a subset; add `evidenceIds` where the UI expects an array.
-
-Filters are `from`, `to`, `personId`, `category`, `uncertain`, `q`. Person IDs are backend entity UUIDs (the same IDs present in evidence `personIds`).
-
-### Audit — `GET /api/audit`
-
-`{ items: [{ id, actor, action, target, at, ip, result, hash, previousHash }], total, chainValid }` maps directly to the existing audit table.
-
-### Reporting — `POST /api/reports/generate`
-
-The backend accepts:
+`PATCH /api/evidence/{id}/capture`:
 
 ```json
-{
-  "title": "Incident Summary — EV-2026-0142",
-  "reportType": "incident",
-  "includeAiSummary": true,
-  "evidenceIds": []
-}
+{ "date": "2026-11-11", "time": "09:00", "location": "Cafe Blue, Mumbai", "persons": ["Vikram Rao"], "note": "Corrected" }
 ```
 
-It returns structured `content` (summary, findings, chronology, people, evidence, integrity, reviewItems) plus `markdown`. `GET /api/reports/{id}/pdf` returns a real server-rendered PDF. The current UI's print-to-PDF button can keep working or be pointed at this endpoint.
+Returns the updated `EvidenceSummary`. The backend replaces capture-derived entities/relationships/timeline event, so the connection graph and timeline refresh immediately.
 
-### Assistant — `POST /api/assistant/chat`
+## People and graph
+
+`GET /api/entities?limit=300` → entities with `id`, `type`, `value`, `mentionCount`, `evidenceCount`, `evidenceIds`. The UI maps `type === "person"` to a `Person` node and connects people that share an evidence id.
+
+## Timeline
+
+`GET /api/timeline?limit=500` → `{ id, at, atRaw, timeUncertain, title, description, category, severity, confidence, evidenceId, evidenceIds, personIds, location, extractionSource }`. Mapped to the UI `IncidentEvent`; events without `at` are skipped.
+
+## Assistant
+
+`POST /api/assistant/chat`
 
 ```json
-{ "question": "What happened on 10 November?", "limit": 8 }
+{ "question": "What happened at the meeting?", "limit": 8 }
 ```
 
-Response:
+Response fields used: `answer` (with `[S1]` citations), `sources[]` (`evidenceName`, `excerpt`, locator), `insufficientEvidence`, `mode`, `retrievalMode`, `model`, `limitations`. The UI renders limitations below the answer and turns `sources[].evidenceName` into citation chips.
 
-```json
-{
-  "answer": "…with [S1] citations…",
-  "insufficientEvidence": false,
-  "sources": [{
-    "evidenceId": "…",
-    "evidenceName": "chat_export.txt",
-    "fileType": "chat",
-    "excerpt": "…",
-    "pageNumber": null,
-    "timestampStart": 123.4,
-    "timestampEnd": 130.2,
-    "locator": "02:03–02:10",
-    "relevance": 0.91
-  }],
-  "mode": "gemini",
-  "retrievalMode": "hybrid",
-  "chunksConsidered": 7,
-  "limitations": [],
-  "generatedAt": "2026-11-14T08:27:22Z"
-}
-```
+`mode` values: `gemini` (AI synthesis), `extractive` (provider unavailable — labelled), `metadata` (deterministic vault questions), `insufficient`. Reindex after enabling embeddings: `POST /api/assistant/reindex` with `{ "evidenceIds": [] }`.
 
-Render `sources` as the citation chips. When `insufficientEvidence` is true, show the answer as the empty-state explanation, not as evidence.
+## Reports
 
-`mode` is `gemini`, `extractive`, or `metadata`; `retrievalMode` is `hybrid`, `lexical`, or `metadata`. Metadata answers are deterministic lookups for questions such as “what is the latest evidence?”. Extractive is only used when Gemini is not configured or cannot be reached; show the limitation text. If Gemini is reachable but returns malformed output, the API returns a 502 error envelope rather than a silent extractive answer. Handle error responses with the shared `error.message` and `error.requestId` fields.
+- `GET /api/reports?limit=50` → saved reports (`id`, `title`, `type`, `status`, `author`, `createdAt`, `pages`, `evidenceCount`).
+- `POST /api/reports/generate` → `{ title, reportType: "incident" | "chronology" | "integrity" | "relationships" | "custom", includeAiSummary }`.
+- `GET /api/reports/{id}/pdf` → server-rendered PDF (downloaded as a blob; browser print is the fallback).
 
-To backfill semantic search after enabling Gemini or switching embedding models:
+## Audit
 
-```http
-POST /api/assistant/reindex
-Content-Type: application/json
+`GET /api/audit?limit=300` → `{ items: [{ id, actor, action, target, at, ip, result }], total, chainValid }`. `GET /api/audit/verify` recomputes the hash chain.
 
-{ "evidenceIds": [] }
-```
+## Implementation notes
 
-## 3. Upload integration
-
-The existing drag/drop and progress UI can use `XMLHttpRequest` for true upload progress:
-
-```ts
-export function uploadEvidence(files: File[], onProgress: (percent: number) => void) {
-  return new Promise((resolve, reject) => {
-    const form = new FormData();
-    files.forEach(file => form.append("files", file));
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${import.meta.env.VITE_API_URL}/evidence/upload`);
-    xhr.upload.onprogress = e => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
-    xhr.onload = () => xhr.status === 202 ? resolve(JSON.parse(xhr.responseText)) : reject(new Error(xhr.responseText));
-    xhr.onerror = () => reject(new Error("Upload failed"));
-    xhr.send(form);
-  });
-}
-```
-
-Returned items are already backend records. Poll each `GET /evidence/{id}/status` every 1–2 s and update the row/progress. The response `duplicates` array contains exact and perceptual matches — surface it as a warning; do not delete either file.
-
-## 4. Suggested integration order
-
-1. Replace `frontend/src/lib/api.ts` mock functions with fetch calls; keep the same signatures.
-2. Load evidence in the store and poll incomplete items.
-3. Replace the assistant mock in `frontend/src/lib/assistant.ts` with `POST /assistant/chat` and adapt the response into `ChatMessage` (citations → evidence chips).
-4. Map `/api/entities` and `/api/timeline` into the existing `people`/`events` data.
-5. Add an optimistic upload row using the returned item, then update it from the status endpoint.
-6. Keep mock data as a fallback when the API health check fails so the UI demo remains usable.
-
-## 5. Demo without wiring the UI
-
-The complete workflow is available through Swagger at `/docs`:
-
-1. Upload a screenshot or PDF.
-2. Poll status until `completed`.
-3. Open `GET /evidence/{id}` for extracted text, entities and timeline events.
-4. Open `GET /timeline` and `GET /entities/graph`.
-5. Ask the assistant a grounded question.
-6. Generate a report and download its PDF.
-7. Verify the audit chain at `GET /audit/verify`.
+- Browser hash computation is no longer used: the backend hashes at intake and returns the digest.
+- Deleting an item removes it from the UI list; the backend keeps the original (soft delete) and records the action.
+- The UI shows empty states when the backend has no data — there is no synthetic fallback.

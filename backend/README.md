@@ -2,9 +2,11 @@
 
 FastAPI backend for the TraceVault digital evidence platform. It preserves original files, extracts text and speech, resolves entities, reconstructs a timeline and answers questions with citations back to the preserved source.
 
-Everything runs locally. Gemini, OCR and Whisper degrade explicitly when unavailable — the API never fabricates extracted content.
+Everything runs locally. OCR, Whisper and AI synthesis degrade explicitly when unavailable — the API never fabricates extracted content.
 
-Frontend wiring guide: [`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTEGRATION.md).
+AI can run through Google Gemini (`AI_PROVIDER=google`) or the OpenCode inference gateway (`AI_PROVIDER=opencode`). Embeddings always use Google Gemini.
+
+Frontend: the React app in `../frontend` is fully wired to this API. Field mapping and request shapes: [`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTEGRATION.md).
 
 ## What is implemented
 
@@ -14,10 +16,12 @@ Frontend wiring guide: [`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTE
 | P0 | Image OCR (EasyOCR, optional Paddle/Tesseract/Gemini vision) | ✅ |
 | P0 | PDF text extraction with page numbers and scanned-page OCR | ✅ |
 | P0 | Audio transcription with Whisper and segment timestamps | ✅ |
-| P0 | Gemini entity extraction + deterministic spaCy/regex fallback | ✅ |
+| P0 | AI entity extraction (Gemini/OpenCode) + deterministic spaCy/regex fallback | ✅ |
 | P0 | Timeline reconstruction with UTC normalisation and uncertainty flags | ✅ |
 | P1 | Video frame extraction, frame OCR, audio track transcription | ✅ |
 | P1 | Evidence-grounded assistant with hybrid RAG, page/audio citations | ✅ |
+| P1 | Pluggable AI providers: Google Gemini or OpenCode gateway (OpenAI-compatible models) | ✅ |
+| P1 | Capture metadata (date/time/location/people/note) with auto-detection and editing | ✅ |
 | P1 | Semantic chunk index + Gemini embeddings (`gemini-embedding-001`) | ✅ |
 | P1 | Entity relationship graph | ✅ |
 | P1 | Exact SHA-256 + perceptual (dHash) duplicate warnings | ✅ |
@@ -45,12 +49,13 @@ backend/
       pdf_service        PyMuPDF text + scanned page OCR
       audio_service      FFmpeg probe/convert + Whisper transcription
       video_service      representative frames + audio extraction
-      entity_service     Gemini extraction, validated entities, fallback NER
+      entity_service     AI extraction, validated entities, fallback NER
+      capture_service    capture metadata → entities, relationships, timeline event
       chunking_service   locator-preserving evidence chunks for retrieval
       rag_service        chunk persistence + Gemini embedding index
       retrieval_service  hybrid vector/lexical/entity ranking
       timeline_service   event extraction, normalisation, dedupe
-      assistant_service  retrieval + Gemini answer with citations
+      assistant_service  retrieval + AI answer with citations
       report_service     structured report + ReportLab PDF
       integrity_service  re-hash and verify originals
       audit_service      previous-hash chaining
@@ -98,7 +103,31 @@ Install and ensure `ffmpeg` / `ffprobe` are on PATH (Windows: `winget install Gy
 * EasyOCR: detection + recognition weights (~100 MB) download on first OCR call.
 * Whisper: `small` (~460 MB) downloads on first transcription. For a fast demo set `WHISPER_MODEL=tiny` or `DEMO_AUDIO_MODEL=true`.
 * spaCy: `en_core_web_sm` (~13 MB) improves person/organisation recall. Without it, a conservative regex fallback is used.
-* Gemini: optional. Set `GEMINI_API_KEY` to enable AI analysis. Without it, entity extraction uses deterministic NER and the assistant returns an extractive summary (clearly labelled).
+* AI: optional. Configure **one** provider (see below). Without a provider, entity extraction uses deterministic NER and the assistant returns a labelled extractive summary.
+
+### AI providers
+
+**Google Gemini** (chat + embeddings):
+
+```env
+AI_PROVIDER=google
+GEMINI_API_KEY=<Google AI Studio key>
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+**OpenCode inference gateway** (chat; embeddings stay on Gemini):
+
+```env
+AI_PROVIDER=opencode
+OPENCODE_API_KEY=<OpenCode Console key>
+OPENCODE_MODEL=deepseek-v4.1-flash
+OPENCODE_CHAT_BASE=https://opencode.ai/inference/go   # Go plan
+# OPENCODE_CHAT_BASE=https://opencode.ai/inference    # Console pay-as-you-go
+```
+
+The transport picks the API shape from the model id: models starting with `gemini` use the Gemini `generateContent` surface; all others use OpenAI-compatible `/chat/completions`. Requests send a self-identifying `User-Agent` and a stable `x-opencode-session` header, which the gateway requires.
+
+Embeddings always use `GEMINI_API_KEY` + `gemini-embedding-001`; the gateway serves no embedding models. Without a Google key, chunks are still stored and retrieval runs in lexical mode (`retrievalMode: "lexical"`). Re-run `POST /api/assistant/reindex` after enabling or changing embeddings.
 
 ## PostgreSQL + Alembic
 
@@ -125,8 +154,12 @@ All settings are in `.env.example`. Important values:
 | `UPLOAD_DIR` | `./uploads` | Originals/derived/temp |
 | `MAX_UPLOAD_MB` | `2048` | Enforced while streaming |
 | `CORS_ORIGINS` | localhost:5173, … | Comma-separated; also allows any localhost port |
-| `GEMINI_API_KEY` | empty | Server-side only; never exposed |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Answer generation model |
+| `AI_PROVIDER` | `google` | `google` or `opencode` |
+| `GEMINI_API_KEY` | empty | Chat (google) and embeddings; server-side only |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Google chat model |
+| `OPENCODE_API_KEY` | empty | OpenCode Console key |
+| `OPENCODE_MODEL` | `deepseek-v4.1-flash` | Any gateway model |
+| `OPENCODE_CHAT_BASE` | `https://opencode.ai/inference/go` | Provider root (no API-shape suffix) |
 | `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Retrieval embeddings |
 | `GEMINI_EMBEDDING_DIMENSIONS` | `768` | Stored vectors are 768-dimensional |
 | `RAG_CHUNK_SIZE` | `1200` | Characters per retrieval passage |
@@ -149,6 +182,20 @@ pending → processing → completed
 
 Stages: `text_extraction`, `audio_transcription`, `rag_indexing`, `entity_extraction`, `timeline_reconstruction`, `integrity_check`.
 
+Roadmap: `processing → completed`, with `failed` preserving the error. See `/evidence/{id}/status`.
+
+### Capture metadata
+
+Uploads may include analyst-supplied `date`, `time`, `location`, `persons` (JSON array) and `note`. With `autoDetect=true`, blank fields are filled after processing from what extraction found in the file (EXIF timestamp, earliest dated event, location entity, person entities). Detected fields are recorded in `meta.capture.detected`.
+
+`capture_service` materialises capture details into:
+
+- `person` / `location` entities linked to the evidence,
+- co-occurrence relationships (person↔person, person↔location),
+- a timeline event at the captured date/time (or an undated capture event).
+
+`PATCH /evidence/{id}/capture` replaces the capture details, removes only capture-derived artifacts, and re-syncs the graph/timeline without touching extraction-derived entities.
+
 Processing is serialised in-process with a lock because OCR/ASR models are CPU- and memory-heavy. For multiple workers, replace `BackgroundTasks` with a real queue (RQ/Celery/Arq). Interrupted jobs are marked `failed` on startup and can be retried with `POST /api/evidence/{id}/reprocess`.
 
 ### Extraction detail
@@ -161,7 +208,9 @@ Processing is serialised in-process with a lock because OCR/ASR models are CPU- 
 
 ### Entities and timeline
 
-With Gemini configured, extraction is schema-constrained and every item must carry a verbatim excerpt that is present in the source text. Anything that cannot be verified is discarded. Without Gemini, spaCy NER + regex extracts people, phones, emails, organisations, locations and dates, all labelled `source: "spacy"` or `"regex_fallback"`.
+With an AI provider configured, extraction is schema-constrained and every item must carry a verbatim excerpt that is present in the source text. Anything that cannot be verified is discarded. Without AI, spaCy NER + regex extracts people, phones, emails, organisations, locations and dates, all labelled `source: "spacy"` or `"regex_fallback"`.
+
+Capture metadata (analyst-entered or auto-detected) is synced by `capture_service` into the same entity/relationship/timeline tables, so newly added people and places immediately appear in the connection graph and timeline. Capture-derived rows are tagged `meta.source = "capture"` / `extraction_source = "capture"` and can be replaced safely on edit.
 
 Timeline events keep:
 
@@ -178,11 +227,12 @@ Base URL: `http://127.0.0.1:8000/api`
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/evidence/upload` | Multipart `files` (or `file`); 202 with items/warnings |
+| POST | `/evidence/upload` | Multipart `files` (or `file`); optional `date`, `time`, `location`, `persons` (JSON array), `note`, `autoDetect`; 202 with items/warnings |
 | GET | `/evidence` | Search/filter (`q`, `type`, `status`, `personId`, `sort`, pagination) |
-| GET | `/evidence/{id}` | Metadata, extracted content, entities, events, duplicates |
+| GET | `/evidence/{id}` | Metadata, extracted content, entities, events, capture details, duplicates |
 | GET | `/evidence/{id}/status` | Live processing progress |
 | GET | `/evidence/{id}/download` | Original file; logs access; exposes `X-Evidence-SHA256` |
+| PATCH | `/evidence/{id}/capture` | Correct date/time/location/people/note; re-syncs entities + timeline |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256, update integrity, audit |
 | POST | `/evidence/{id}/reprocess` | Re-run extraction |
 | DELETE | `/evidence/{id}` | Soft delete; original retained; audited |
@@ -210,11 +260,20 @@ All responses use camelCase and UTC timestamps with `Z` (the frontend's dialect)
 ### Demo requests
 
 ```bash
-curl -F "files=@incident.pdf" http://127.0.0.1:8000/api/evidence/upload
+curl -F "files=@incident.pdf" \
+  -F "date=2026-11-10" -F "time=22:14" \
+  -F "location=Hotel Sunrise, Pune" \
+  -F 'persons=["Ravi Kulkarni","Priya Sharma"]' \
+  -F "note=Handed over in person" -F "autoDetect=true" \
+  http://127.0.0.1:8000/api/evidence/upload
 
 curl http://127.0.0.1:8000/api/evidence
 curl http://127.0.0.1:8000/api/evidence/<id>
 curl http://127.0.0.1:8000/api/evidence/<id>/status
+
+curl -X PATCH http://127.0.0.1:8000/api/evidence/<id>/capture \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-11-11","time":"09:00","location":"Cafe Blue, Mumbai","persons":["Vikram Rao"],"note":"Corrected by analyst"}'
 
 curl "http://127.0.0.1:8000/api/timeline?personId=<entity-uuid>"
 curl http://127.0.0.1:8000/api/entities/graph
@@ -245,17 +304,17 @@ At question time:
 1. The question is embedded with `RETRIEVAL_QUERY`.
 2. Retrieval combines cosine similarity (70%), lexical score (20%) and explicit entity matches (10%).
 3. Irrelevant questions are rejected by a vector-relevance gate rather than answered from unrelated evidence.
-4. Top passages are passed to Gemini with source markers, evidence IDs and locators; returned citations are validated.
+4. Top passages are passed to the configured AI provider with source markers, evidence IDs and locators; returned citations are validated.
 
 `GET /api/health` exposes chunk coverage. `POST /api/assistant/reindex` backfills the index for evidence processed before RAG was enabled. New uploads index automatically; if the embedding API is unavailable, chunks are still stored and can be re-embedded later.
 
 ### Fallback policy
 
-* Gemini **not configured, unreachable, timed out, rate-limited (429) or 5xx** → `mode: "extractive"` with verbatim retrieved passages and an explicit limitation.
-* Gemini returns **malformed JSON, blocks the request, or rejects the key/model** → HTTP 502/422 error envelope. The chatbot does **not** silently pretend an extractive answer is AI analysis.
-* Query embedding unavailable but generation reachable → lexical retrieval, Gemini answer still runs (`retrievalMode: "lexical"`).
+* Provider **not configured, unreachable, timed out, rate-limited (429), 5xx, missing model, insufficient balance or rejected key** → `mode: "extractive"` with verbatim retrieved passages and an explicit limitation. The response is still `200`.
+* Provider returns **malformed/invalid JSON** after retries → error envelope (422/502). The chatbot does **not** silently pretend an extractive answer is AI analysis.
+* Query embedding unavailable but generation reachable → lexical retrieval, AI answer still runs (`retrievalMode: "lexical"`).
 * No passage passes relevance → `insufficientEvidence: true`.
-* Questions about the vault itself (“latest evidence”, “how many files”, “list recent uploads”) are answered deterministically from evidence metadata with `mode: "metadata"`; they do not depend on Gemini.
+* Questions about the vault itself (“latest evidence”, “how many files”, “list recent uploads”) are answered deterministically from evidence metadata with `mode: "metadata"`; they do not depend on the AI provider.
 
 If the request includes `evidenceIds` and none match active evidence, the assistant returns an explicit insufficient-evidence message naming the filter rather than claiming the workspace is empty.
 
@@ -274,7 +333,7 @@ If the request includes `evidenceIds` and none match active evidence, the assist
 * All storage paths resolve inside `UPLOAD_DIR`; downloads are served only by evidence ID.
 * Upload size is enforced during streaming.
 * Uploads are never served statically.
-* No API keys are hardcoded; Gemini keys live only in the server environment.
+* No API keys are hardcoded; provider keys live only in the server environment.
 * CORS is limited to configured origins plus localhost dev ports.
 * There is **no authentication/RBAC** yet — add it before exposing the service publicly.
 
@@ -286,12 +345,15 @@ pytest -q
 
 The suite exercises a real PDF upload → hash → text extraction → RAG chunking → embedding interface (mocked in tests) → entity extraction → timeline → duplicate warning → assistant retrieval + fallback policy → report + PDF → audit chain verification → soft delete. It runs on isolated SQLite/uploads directories.
 
+Capture metadata and `PATCH /evidence/{id}/capture` are covered by the same workflow (upload with date/location/people → entities + timeline event → edit → re-sync).
+
 ## Known limitations
 
 * In-process background jobs and an in-process audit-chain lock; use a queue and a single ledger writer when scaling.
 * OCR/ASR on CPU is slow (an HD screenshot can take ~30–60 s; video processing scales with sampled frames). Tune frame interval/model size.
 * OCR is configured for English by default (`OCR_LANGUAGES=en`); EasyOCR supports more languages.
-* The Gemini paths require a valid key. Without it, entity extraction keeps its labelled deterministic fallback, while the chatbot returns a labelled extractive response.
+* AI paths require a valid provider key/model (and, for OpenCode pay-as-you-go, available balance). Without one, entity extraction keeps its labelled deterministic fallback and the assistant returns a labelled extractive response.
+* Embeddings require a Google Gemini key even when chat runs through OpenCode. Without it, retrieval is lexical only.
 * Embeddings are ranked in Python over up to `RAG_MAX_CHUNKS` rows (portable SQLite/Postgres). Move to pgvector when the corpus grows beyond a few thousand chunks.
 * Re-run `POST /api/assistant/reindex` after changing the embedding model/dimensions.
 * ReportLab PDF layout is intentionally simple.
