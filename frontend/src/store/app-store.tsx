@@ -17,7 +17,7 @@ import {
   people,
   pipeline,
 } from "@/data/mock";
-import type { EvidenceItem, EvidenceType, Insight } from "@/data/types";
+import type { EvidenceItem, EvidenceStatus, EvidenceType, Insight } from "@/data/types";
 import { api } from "@/lib/api";
 import { answer, type ChatMessage } from "@/lib/assistant";
 import { formatBytes } from "@/lib/format";
@@ -64,6 +64,7 @@ interface AppContextValue {
   setSearchOpen: (open: boolean) => void;
   uploads: Record<string, number>;
   uploadFiles: (files: File[]) => void;
+  deleteEvidence: (id: string) => Promise<void>;
   messages: ChatMessage[];
   thinking: boolean;
   ask: (question: string) => void;
@@ -82,6 +83,23 @@ function inferType(file: File): EvidenceType {
   if (/\.(csv|json|xlsx|xls)$/i.test(file.name)) return "data";
   if (/(chat|whatsapp|telegram|export|messages?)/i.test(file.name)) return "chat";
   return "data";
+}
+
+const STATUS_MAP: Record<string, EvidenceStatus> = {
+  pending: "queued",
+  processing: "processing",
+  completed: "processed",
+  failed: "failed",
+};
+
+function mapStatus(value: string): EvidenceStatus {
+  return STATUS_MAP[value] ?? "processing";
+}
+
+function mapIntegrity(value: string | undefined): EvidenceItem["integrity"] {
+  if (value === "verified") return "verified";
+  if (value === "mismatch") return "mismatch";
+  return "pending";
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -108,6 +126,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     document.documentElement.style.colorScheme = theme;
     localStorage.setItem("veritas-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.listEvidence().then((items) => {
+      if (cancelled || items.length === 0) return;
+      setEvidence((prev) => {
+        const seen = new Set(items.map((item) => item.id));
+        return [...items, ...prev.filter((item) => !seen.has(item.id))];
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -144,76 +176,142 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const uploadFiles = useCallback(
     (files: File[]) => {
       const accepted = files.slice(0, 12);
-      accepted.forEach(async (file) => {
-        const { id, hash } = await api.upload(file);
-        const url = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-        const item: EvidenceItem = {
-          id,
-          name: file.name,
-          type: inferType(file),
-          mime: file.type || "application/octet-stream",
-          size: file.size,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: "Aarav Shah",
-          status: "queued",
-          source: "Local upload",
-          hash,
-          tags: ["new intake"],
-          personIds: [],
-          eventIds: [],
-          note: "Added in this session. Awaiting entity extraction and relationship mapping.",
-          preview: `${file.type || "binary"} · ${formatBytes(file.size)}`,
-          url,
-          integrity: "pending",
-        };
-        setEvidence((prev) => [item, ...prev]);
-        setUploads((prev) => ({ ...prev, [id]: 2 }));
-        setAuditLogs((prev) => [
-          {
-            id: `a-${id}`,
-            actor: "Aarav Shah",
-            action: "Uploaded evidence",
-            target: file.name,
-            at: new Date().toISOString(),
-            ip: "10.24.8.112",
-            result: "success",
-          },
-          ...prev,
-        ]);
-        toast("Evidence preserved", `${file.name} hashed and queued for processing.`, "success");
+      accepted.forEach((file) => {
+        void (async () => {
+          let upload: { id: string; hash: string };
+          try {
+            upload = await api.upload(file);
+          } catch (error) {
+            toast(
+              "Upload failed",
+              error instanceof Error ? error.message : `${file.name} could not be preserved.`,
+              "danger",
+            );
+            return;
+          }
+          const { id, hash } = upload;
+          const url = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+          const item: EvidenceItem = {
+            id,
+            name: file.name,
+            type: inferType(file),
+            mime: file.type || "application/octet-stream",
+            size: file.size,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: "Aarav Shah",
+            status: "queued",
+            source: "Local upload",
+            hash,
+            tags: ["new intake"],
+            personIds: [],
+            eventIds: [],
+            note: "Added in this session. Awaiting entity extraction and relationship mapping.",
+            preview: `${file.type || "binary"} · ${formatBytes(file.size)}`,
+            url,
+            integrity: "pending",
+          };
+          setEvidence((prev) => [item, ...prev]);
+          setUploads((prev) => ({ ...prev, [id]: 2 }));
+          setAuditLogs((prev) => [
+            {
+              id: `a-${id}`,
+              actor: "Aarav Shah",
+              action: "Uploaded evidence",
+              target: file.name,
+              at: new Date().toISOString(),
+              ip: "10.24.8.112",
+              result: "success",
+            },
+            ...prev,
+          ]);
+          toast("Evidence preserved", `${file.name} hashed and queued for processing.`, "success");
 
-        let progress = 2;
-        const tick = window.setInterval(() => {
-          progress = Math.min(100, progress + Math.random() * 18 + 6);
-          setUploads((prev) => ({ ...prev, [id]: Math.round(progress) }));
-          if (progress < 100 && progress > 25) {
-            setEvidence((prev) =>
-              prev.map((e) => (e.id === id && e.status === "queued" ? { ...e, status: "processing" } : e)),
-            );
-          }
-          if (progress >= 100) {
-            window.clearInterval(tick);
-            setEvidence((prev) =>
-              prev.map((e) => (e.id === id ? { ...e, status: "processed", integrity: "verified" } : e)),
-            );
-            setNotifications((prev) => [
-              {
-                id: `n-${id}`,
-                title: "Processing complete",
-                body: `${file.name} · entities extracted · SHA-256 verified.`,
-                at: new Date().toISOString(),
-                read: false,
-                kind: "processing",
-              },
-              ...prev,
-            ]);
-            toast("Processing complete", `${file.name} is now searchable.`, "success");
-          }
-        }, 420);
-        timers.current.push(tick);
+          // Poll the backend until processing finishes.
+          let attempts = 0;
+          const tick = window.setInterval(async () => {
+            attempts += 1;
+            try {
+              const status = await api.evidenceStatus(id);
+              const progress = Math.max(2, Math.round(status.progress));
+              setUploads((prev) => ({ ...prev, [id]: progress }));
+              setEvidence((prev) =>
+                prev.map((e) =>
+                  e.id === id
+                    ? { ...e, status: mapStatus(status.status), integrity: mapIntegrity(status.integrity) }
+                    : e,
+                ),
+              );
+              if (status.status === "completed" || status.status === "failed") {
+                window.clearInterval(tick);
+                setUploads((prev) => ({ ...prev, [id]: 100 }));
+                if (status.status === "completed") {
+                  setNotifications((prev) => [
+                    {
+                      id: `n-${id}`,
+                      title: "Processing complete",
+                      body: `${file.name} · entities extracted · integrity ${mapIntegrity(status.integrity)}.`,
+                      at: new Date().toISOString(),
+                      read: false,
+                      kind: "processing",
+                    },
+                    ...prev,
+                  ]);
+                  toast("Processing complete", `${file.name} is now searchable.`, "success");
+                } else {
+                  toast("Processing failed", status.error ?? `${file.name} could not be processed.`, "danger");
+                }
+              }
+            } catch {
+              // Item may still be registering; keep polling briefly.
+              if (attempts >= 150) window.clearInterval(tick);
+            }
+          }, 2000);
+          timers.current.push(tick);
+        })();
       });
     },
     [toast],
+  );
+
+  const deleteEvidence = useCallback(
+    async (id: string) => {
+      const item = evidence.find((entry) => entry.id === id);
+      try {
+        await api.deleteEvidence(id);
+      } catch (error) {
+        toast(
+          "Delete failed",
+          error instanceof Error ? error.message : "The item could not be removed.",
+          "danger",
+        );
+        return;
+      }
+      setEvidence((prev) => prev.filter((entry) => entry.id !== id));
+      setUploads((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setOpenEvidenceId((current) => (current === id ? null : current));
+      setAuditLogs((prev) => [
+        {
+          id: `a-del-${id}`,
+          actor: "Aarav Shah",
+          action: "Removed evidence",
+          target: item?.name ?? id,
+          at: new Date().toISOString(),
+          ip: "10.24.8.112",
+          result: "warning",
+        },
+        ...prev,
+      ]);
+      toast(
+        "Evidence removed",
+        `${item?.name ?? "Item"} removed from the active vault. Original retained for custody.`,
+        "success",
+      );
+    },
+    [evidence, toast],
   );
 
   const markRead = useCallback((id: string) => {
@@ -301,6 +399,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSearchOpen,
       uploads,
       uploadFiles,
+      deleteEvidence,
       messages,
       thinking,
       ask,
@@ -326,6 +425,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       searchOpen,
       uploads,
       uploadFiles,
+      deleteEvidence,
       messages,
       thinking,
       ask,

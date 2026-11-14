@@ -8,6 +8,7 @@ import {
   List,
   Plus,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchInput } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile, StatusBadge, typeMeta } from "@/components/evidence/file-type";
 import { formatBytes, formatDate, timeAgo, truncateHash } from "@/lib/format";
@@ -35,7 +37,7 @@ const typeFilters: { value: "all" | EvidenceType; label: string }[] = [
 ];
 
 export function VaultPage() {
-  const { evidence, people, uploadFiles, openEvidence, uploads, toast } = useApp();
+  const { evidence, people, uploadFiles, openEvidence, uploads, toast, deleteEvidence } = useApp();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | EvidenceType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | EvidenceStatus>("all");
@@ -43,7 +45,19 @@ export function VaultPage() {
   const [layout, setLayout] = useState<"list" | "grid">("list");
   const [sort, setSort] = useState<"newest" | "oldest" | "name" | "size">("newest");
   const [dragging, setDragging] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const deleteTarget = pendingDelete ? evidence.find((item) => item.id === pendingDelete) : undefined;
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    await deleteEvidence(pendingDelete);
+    setDeleting(false);
+    setPendingDelete(null);
+  };
 
   useEffect(() => {
     const prevent = (e: globalThis.DragEvent) => e.preventDefault();
@@ -400,7 +414,20 @@ export function VaultPage() {
                         <StatusBadge status={item.status} />
                       </td>
                       <td className="px-2 py-2.5">
-                        <ChevronRight className="h-3.5 w-3.5 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPendingDelete(item.id);
+                            }}
+                            aria-label={`Delete ${item.name}`}
+                            title="Remove from vault"
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-3 opacity-0 transition-all hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          <ChevronRight className="h-3.5 w-3.5 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </div>
                       </td>
                     </tr>
                   );
@@ -413,32 +440,41 @@ export function VaultPage() {
             {filtered.map((item) => {
               const linked = people.filter((p) => item.personIds.includes(p.id));
               return (
-                <button
-                  key={item.id}
-                  onClick={() => openEvidence(item.id)}
-                  className="group flex flex-col rounded-xl border border-line bg-surface p-3 text-left transition-all duration-200 hover:border-line-strong hover:shadow-card"
-                >
-                  <div className="flex items-start gap-2.5">
-                    <FileTypeTile type={item.type} size="lg" />
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-[12.5px] font-medium leading-snug">{item.name}</p>
-                      <p className="mt-1 text-[10.5px] text-ink-3">
-                        {typeMeta[item.type].label} · {formatBytes(item.size)}
-                      </p>
+                <div key={item.id} className="group relative">
+                  <button
+                    onClick={() => openEvidence(item.id)}
+                    className="flex w-full flex-col rounded-xl border border-line bg-surface p-3 text-left transition-all duration-200 hover:border-line-strong hover:shadow-card"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <FileTypeTile type={item.type} size="lg" />
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-[12.5px] font-medium leading-snug">{item.name}</p>
+                        <p className="mt-1 text-[10.5px] text-ink-3">
+                          {typeMeta[item.type].label} · {formatBytes(item.size)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
-                    <div className="flex items-center -space-x-1.5">
-                      {linked.slice(0, 3).map((p) => (
-                        <PersonAvatar key={p.id} person={p} size="xs" ring />
-                      ))}
-                      {linked.length === 0 && (
-                        <span className="text-[10.5px] text-ink-3">{formatDate(item.uploadedAt)}</span>
-                      )}
+                    <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+                      <div className="flex items-center -space-x-1.5">
+                        {linked.slice(0, 3).map((p) => (
+                          <PersonAvatar key={p.id} person={p} size="xs" ring />
+                        ))}
+                        {linked.length === 0 && (
+                          <span className="text-[10.5px] text-ink-3">{formatDate(item.uploadedAt)}</span>
+                        )}
+                      </div>
+                      <StatusBadge status={item.status} />
                     </div>
-                    <StatusBadge status={item.status} />
-                  </div>
-                </button>
+                  </button>
+                  <button
+                    onClick={() => setPendingDelete(item.id)}
+                    aria-label={`Delete ${item.name}`}
+                    title="Remove from vault"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md bg-surface/90 text-ink-3 opacity-0 shadow-sm transition-all hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -461,6 +497,32 @@ export function VaultPage() {
           {evidence.length} items
         </Badge>
       </p>
+
+      <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="max-w-md p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger">
+              <Trash2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-[14px] font-semibold">Remove evidence from vault?</DialogTitle>
+              <DialogDescription className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                <span className="font-medium text-ink">{deleteTarget?.name ?? "This item"}</span> will be
+                removed from the active vault and its derived index. The original file and SHA-256 custody
+                record are retained.
+              </DialogDescription>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setPendingDelete(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="sm" onClick={confirmDelete} disabled={deleting}>
+              <Trash2 className="h-3.5 w-3.5" /> {deleting ? "Removing…" : "Remove"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

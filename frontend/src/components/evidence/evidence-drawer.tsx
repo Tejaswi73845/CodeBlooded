@@ -8,12 +8,15 @@ import {
   Flag,
   Link2,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "@/store/app-store";
+import { api, isBackendEvidenceId } from "@/lib/api";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EvidencePreview } from "./evidence-preview";
 import { IntegrityBadge, StatusBadge, typeMeta } from "./file-type";
 import { PersonAvatar } from "@/components/person-avatar";
@@ -29,8 +32,12 @@ export function EvidenceDrawer() {
     navigate,
     selectPerson,
     toast,
+    deleteEvidence,
   } = useApp();
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const item = evidence.find((e) => e.id === openEvidenceId);
 
   if (!item) {
@@ -46,6 +53,42 @@ export function EvidenceDrawer() {
     setCopied(true);
     toast("Hash copied", "SHA-256 digest copied to clipboard.");
     window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  const remove = async () => {
+    setDeleting(true);
+    await deleteEvidence(item.id);
+    setDeleting(false);
+    setConfirmDelete(false);
+  };
+
+  const download = async () => {
+    if (isBackendEvidenceId(item.id)) {
+      setDownloading(true);
+      try {
+        await api.downloadEvidence(item.id, item.name);
+        toast("Download ready", `${item.name} · custody stamp included.`, "success");
+      } catch (error) {
+        toast(
+          "Download failed",
+          error instanceof Error ? error.message : "The file could not be downloaded.",
+          "danger",
+        );
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
+    if (item.url) {
+      const anchor = document.createElement("a");
+      anchor.href = item.url;
+      anchor.download = item.name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      return;
+    }
+    toast("No preserved file", "This demo item has no file stored on the server.", "danger");
   };
 
   return (
@@ -198,9 +241,10 @@ export function EvidenceDrawer() {
             variant="primary"
             size="md"
             className="flex-1"
-            onClick={() => toast("Download prepared", `${item.name} · custody stamp included.`, "success")}
+            onClick={download}
+            disabled={downloading}
           >
-            <Download className="h-3.5 w-3.5" /> Download
+            <Download className="h-3.5 w-3.5" /> {downloading ? "Downloading…" : "Download"}
           </Button>
           <Button
             variant="secondary"
@@ -217,8 +261,43 @@ export function EvidenceDrawer() {
           >
             <Flag className="h-4 w-4" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Remove from vault"
+            title="Remove from vault"
+            onClick={() => setConfirmDelete(true)}
+            className="text-ink-3 hover:bg-danger/10 hover:text-danger"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </SheetContent>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="max-w-md p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger">
+              <Trash2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-[14px] font-semibold">Remove evidence from vault?</DialogTitle>
+              <DialogDescription className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                <span className="font-medium text-ink">{item.name}</span> will be removed from the active
+                vault and its derived index. The original file and SHA-256 custody record are retained.
+              </DialogDescription>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="sm" onClick={remove} disabled={deleting}>
+              <Trash2 className="h-3.5 w-3.5" /> {deleting ? "Removing…" : "Remove"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
