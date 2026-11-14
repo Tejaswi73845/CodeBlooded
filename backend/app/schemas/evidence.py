@@ -106,6 +106,18 @@ class EvidenceAiSummary(APIModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+class VaultVerifyResponse(APIModel):
+    checked: int
+    verified: int
+    mismatch: int
+    failed: int
+    chain_valid: bool
+    broken_at: int | None = None
+    checked_at: datetime
+    mismatched_ids: list[uuid.UUID] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
 class UploadError(APIModel):
     filename: str
     error: str

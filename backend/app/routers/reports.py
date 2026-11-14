@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import current_workspace
 from app.models import Workspace
-from app.schemas.report import ReportGenerateRequest, ReportOut, ReportPage
-from app.services import report_service
+from app.schemas.report import CaseAnalysisOut, ReportGenerateRequest, ReportOut, ReportPage
+from app.services import case_analysis_service, report_service
 from app.services.audit_service import record_audit
 from app.utils.http import actor_name, client_ip, user_agent
 from app.utils.text import slugify
@@ -55,6 +55,16 @@ def list_reports(
 ):
     items, total = report_service.list_reports(db, limit=limit, offset=offset, workspace_id=workspace.id)
     return ReportPage(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/case-analysis", response_model=CaseAnalysisOut)
+def case_analysis(
+    refresh: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    """Classify the case, summarise it in detail, and flag out-of-scope evidence."""
+    return case_analysis_service.analyze_case(db, workspace, refresh=refresh)
 
 
 @router.get("/{report_id}", response_model=ReportOut)

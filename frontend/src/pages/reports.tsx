@@ -7,8 +7,9 @@ import {
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/store/app-store";
+import { api, type CaseAnalysis } from "@/lib/api";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { formatBytes, formatDate, formatDateTime, formatTime, truncateHash } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type SectionKey = "summary" | "findings" | "chronology" | "people" | "evidence" | "integrity";
+type SectionKey =
+  | "summary"
+  | "findings"
+  | "chronology"
+  | "people"
+  | "evidence"
+  | "integrity"
+  | "relatedness";
 
 const sectionLabels: { key: SectionKey; label: string }[] = [
   { key: "summary", label: "Incident summary" },
@@ -26,10 +34,11 @@ const sectionLabels: { key: SectionKey; label: string }[] = [
   { key: "people", label: "People involved" },
   { key: "evidence", label: "Supporting evidence" },
   { key: "integrity", label: "Evidence integrity" },
+  { key: "relatedness", label: "Out-of-scope evidence" },
 ];
 
 export function ReportsPage() {
-  const { evidence, events, insights, openEvidence, people, workspace } = useApp();
+  const { evidence, events, insights, openEvidence, people, workspace, activeWorkspaceId } = useApp();
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     summary: true,
     findings: true,
@@ -37,8 +46,34 @@ export function ReportsPage() {
     people: true,
     evidence: true,
     integrity: true,
+    relatedness: true,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [analysis, setAnalysis] = useState<CaseAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const evidenceKey = useMemo(
+    () => `${evidence.map((item) => item.id).sort().join(",")}:${events.length}`,
+    [evidence, events.length],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setAnalysisLoading(true);
+    void api
+      .caseAnalysis()
+      .then((result) => {
+        if (!cancelled) setAnalysis(result);
+      })
+      .catch(() => {
+        if (!cancelled) setAnalysis(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAnalysisLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, evidenceKey]);
 
   const chronology = useMemo(() => [...events].sort((a, b) => +new Date(a.at) - +new Date(b.at)), [events]);
   const involved = useMemo(
@@ -99,12 +134,21 @@ export function ReportsPage() {
         ok: sections.chronology,
       },
       {
+        label: "Case type identified",
+        detail: analysis?.caseTypes?.length
+          ? analysis.caseTypes.map((type) => type.label).join(", ")
+          : analysisLoading
+            ? "Analysing…"
+            : "Not classified",
+        ok: (analysis?.caseTypes?.length ?? 0) > 0,
+      },
+      {
         label: "People resolved",
         detail: `${people.length} resolved`,
         ok: people.length > 0,
       },
     ],
-    [evidence.length, people.length, preview.integrity, sections],
+    [analysis, analysisLoading, evidence.length, people.length, preview.integrity, sections],
   );
   const passedChecks = disclosureChecks.filter((check) => check.ok).length;
   const disclosureReady = passedChecks === disclosureChecks.length;
@@ -218,12 +262,38 @@ export function ReportsPage() {
               {sections.summary && (
                 <section>
                   <SectionTitle index="01" title="Incident summary" />
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wide text-ink-3">Case type</span>
+                    {analysis?.caseTypes?.length ? (
+                      analysis.caseTypes.map((type) => (
+                        <Badge
+                          key={type.label}
+                          tone="danger"
+                          className="h-[19px] text-[10px] capitalize"
+                        >
+                          {type.label} · {Math.round(type.confidence * 100)}%
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-[10.5px] text-ink-3">
+                        {analysisLoading ? "Analysing…" : "Not classified"}
+                      </span>
+                    )}
+                    {analysis?.caseTypes?.length ? (
+                      <span className="text-[9.5px] text-ink-3">
+                        {analysis.mode === "ai" ? "AI-classified" : "Keyword-classified"}
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="mt-2.5 space-y-2.5">
-                    {preview.summary.map((p, i) => (
-                      <p key={i} className="text-[12.5px] leading-[1.75] text-ink-2">
+                    {(analysis?.summary ? [analysis.summary] : preview.summary).map((p, i) => (
+                      <p key={i} className="whitespace-pre-line text-[12.5px] leading-[1.75] text-ink-2">
                         {p}
                       </p>
                     ))}
+                    {analysisLoading && !analysis && (
+                      <p className="text-[11px] text-ink-3">Generating detailed case summary…</p>
+                    )}
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {[
@@ -441,6 +511,36 @@ export function ReportsPage() {
                       </div>
                     </div>
                   </div>
+                </section>
+              )}
+
+              {sections.relatedness && (
+                <section>
+                  <SectionTitle index="07" title="Out-of-scope / unrelated evidence" />
+                  {analysis?.unrelated && analysis.unrelated.length > 0 ? (
+                    <ul className="mt-2.5 space-y-1.5">
+                      {analysis.unrelated.map((item, index) => (
+                        <li
+                          key={`${item.name}-${index}`}
+                          className="rounded-lg border border-warning/25 bg-warning/10 px-3 py-2"
+                        >
+                          <p className="flex items-center gap-1.5 text-[11.5px] font-medium">
+                            <CircleAlert className="h-3 w-3 text-warning" /> {item.name}
+                          </p>
+                          <p className="mt-0.5 text-[10.5px] leading-relaxed text-ink-2">{item.reason}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[11.5px] leading-relaxed text-ink-2">
+                      {analysisLoading
+                        ? "Checking evidence relatedness…"
+                        : "No out-of-scope evidence was identified."}
+                    </p>
+                  )}
+                  {analysis?.limitations?.[0] && (
+                    <p className="mt-2 text-[10px] text-ink-3">{analysis.limitations[0]}</p>
+                  )}
                 </section>
               )}
             </div>

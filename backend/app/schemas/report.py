@@ -49,3 +49,24 @@ class ReportPage(APIModel):
     total: int
     limit: int
     offset: int
+
+
+class CaseTypeOut(APIModel):
+    label: str
+    confidence: float = 0.5
+
+
+class UnrelatedEvidenceOut(APIModel):
+    evidence_id: uuid.UUID | None = None
+    name: str
+    reason: str
+
+
+class CaseAnalysisOut(APIModel):
+    case_types: list[CaseTypeOut] = Field(default_factory=list)
+    summary: str = ""
+    unrelated: list[UnrelatedEvidenceOut] = Field(default_factory=list)
+    mode: str = "heuristic"
+    model: str | None = None
+    generated_at: datetime
+    limitations: list[str] = Field(default_factory=list)

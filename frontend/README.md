@@ -82,7 +82,13 @@ src/
 - Drag-and-drop or browse to upload. A **capture details** dialog collects date, time, location, people and a note — all optional.
 - **Auto-detect missing details from the file** (default on): the backend fills blanks after processing; detected fields are labelled in the drawer.
 - List/grid views, search, type/status/person filters, sorting, per-file progress driven by real `GET /evidence/{id}/status` polling.
+- **Verify vault** re-hashes every original in the workspace, updates integrity badges and verifies the audit ledger, then reports counts. The drawer also has a per-item **Verify integrity** action.
 - Completed items missing capture details (date, location or people) are shown as **Needs review**; use the check action (list, grid or drawer) to **mark reviewed / skip**, or add the details first.
+- Each item carries a context-based **Critical / Attention / Normal** priority tag, aligned with timeline severity:
+  - **Critical** — threat, bullying, coercion, fraud or an integrity mismatch
+  - **Attention** — rude/angry/hostile language, a warning event, or capture details needing review
+  - **Normal** — everything else
+  The drawer shows an **AI evidence summary** with a regenerate action.
 - Drawer: real extracted text, capture metadata, integrity hash, linked people/events.
   - **Edit details** corrects date/location/people/note (`PATCH /evidence/{id}/capture`).
   - **Download** fetches the preserved original (`GET /evidence/{id}/download`).
@@ -94,7 +100,7 @@ Real counts, a 7-day intake chart computed from upload dates, processing pipelin
 
 ### Timeline
 
-Events from `GET /timeline` (including capture events), grouped by day. Each card shows an **AI summary**, date/day, raw and normalised time, location, linked people and source files, plus an **Edit** action to correct date/time/location and to **re-summarise with investigator context** (e.g. "this was a refund, not extortion"). Summaries are generated on demand via `POST /timeline/summaries` and cached.
+Events from `GET /timeline` (including capture events), grouped by day. Each card shows an **AI summary**, a shared **Critical / Attention / Normal** severity tag (same classification as the evidence vault), date/day, raw and normalised time, location, linked people and source files, plus an **Edit** action to correct date/time/location and to **re-summarise with investigator context**. Summaries are generated on demand via `POST /timeline/summaries` and cached.
 
 ### People & Connections
 
@@ -106,7 +112,7 @@ Grounded Q&A via `POST /assistant/chat` with source chips for citations. A **Sou
 
 ### Reports
 
-A single live document preview built from your evidence, people and timeline. A **Disclosure check** at the top lists readiness items (evidence preserved, integrity verified, required sections enabled, people resolved). **Document settings** opens a popup with section switches; changes update the preview live and the preview always uses the full page width. **Download PDF** prints the live preview (choose *Save as PDF*), so only the enabled sections are included.
+A single live document preview built from your evidence, people and timeline. A **Disclosure check** at the top lists readiness items (evidence preserved, integrity verified, required sections enabled, case type identified, people resolved). The **Incident summary** shows AI case-type tags (e.g. Fraud, Harassment, Assault, Sexual assault, Threats & extortion, Cybercrime) with confidence and a detailed AI summary. A dedicated **Out-of-scope / unrelated evidence** section lists items that do not belong to the case with the reason. **Document settings** opens a popup with section switches; changes update the preview live and the preview always uses the full page width. **Download PDF** prints the live preview (choose *Save as PDF*), so only the enabled sections are included.
 
 ### Audit
 

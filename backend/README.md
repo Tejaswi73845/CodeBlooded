@@ -246,6 +246,7 @@ Base URL: `http://127.0.0.1:8000/api`
 | POST | `/evidence/{id}/review` | Mark an item reviewed when capture details are intentionally skipped |
 | GET | `/evidence/{id}/download` | Original file; logs access; exposes `X-Evidence-SHA256` |
 | PATCH | `/evidence/{id}/capture` | Correct date/time/location/people/note; re-syncs entities + timeline |
+| POST | `/evidence/verify-all` | Re-hash every active original in the workspace, update integrity, verify the audit chain |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256, update integrity, audit |
 | POST | `/evidence/{id}/reprocess` | Re-run extraction |
 | DELETE | `/evidence/{id}` | Soft delete; original retained; audited |
@@ -260,6 +261,7 @@ Base URL: `http://127.0.0.1:8000/api`
 | POST | `/assistant/reindex` | Backfill chunks + embeddings for existing evidence |
 | POST | `/reports/generate` | Build structured report |
 | GET | `/reports` | Saved reports |
+| GET | `/reports/case-analysis` | Case-type classification, detailed summary, out-of-scope evidence |
 | GET | `/reports/{id}` | Report JSON + markdown |
 | GET | `/reports/{id}/pdf` | Server-rendered PDF |
 | GET | `/audit` | Filterable ledger with chain validity |

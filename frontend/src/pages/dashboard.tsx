@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PersonAvatar, AvatarStack } from "@/components/person-avatar";
 import { FileTypeTile, StatusBadge } from "@/components/evidence/file-type";
+import { PriorityBadge, SeverityBadge, eventSeverityTag, evidencePriority } from "@/components/evidence/priority-badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatBytes, formatDate, formatTime, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -255,7 +256,8 @@ export function DashboardPage() {
                         max={3}
                       />
                     </span>
-                    <span className="hidden w-[104px] justify-end md:flex">
+                    <span className="hidden w-[150px] items-center justify-end gap-1.5 md:flex">
+                      <PriorityBadge priority={evidencePriority(item, events)} />
                       <StatusBadge status={item.status} />
                     </span>
                     <span className="hidden w-[58px] text-right text-[10.5px] text-ink-3 sm:block">
@@ -402,6 +404,10 @@ export function DashboardPage() {
                     <Badge tone="neutral" className="h-[18px] text-[10px]">
                       {event.category}
                     </Badge>
+                    <SeverityBadge
+                      tag={eventSeverityTag(event.severity)}
+                      className="h-[18px] text-[10px]"
+                    />
                     <span className="ml-auto hidden text-[10.5px] text-ink-3 sm:block">
                       {event.evidenceIds.length} source{event.evidenceIds.length === 1 ? "" : "s"}
                     </span>

@@ -13,7 +13,7 @@ from app.database import get_db
 from app.dependencies import current_workspace
 from app.errors import AppError, NotFoundError
 from app.models import Evidence, Workspace
-from app.models.enums import AuditResult, EvidenceStatus, ProcessingStage
+from app.models.enums import AuditResult, EvidenceStatus, IntegrityStatus, ProcessingStage
 from app.schemas.evidence import (
     CaptureUpdate,
     DuplicateWarning,
@@ -24,14 +24,16 @@ from app.schemas.evidence import (
     StatusResponse,
     UploadError,
     UploadResponse,
+    VaultVerifyResponse,
 )
 from app.services import evidence_service, file_service, summary_service
-from app.services.audit_service import record_audit
+from app.services.audit_service import record_audit, verify_chain
 from app.services.capture_service import sync_capture
 from app.services.integrity_service import verify_evidence_integrity
 from app.services.pipeline_service import process_evidence
 from app.utils.http import actor_name, client_ip, optional_uuid, user_agent
 from app.utils.logging import get_logger
+from app.utils.time import utcnow
 
 router = APIRouter(prefix="/evidence", tags=["Evidence"])
 logger = get_logger(__name__)
@@ -283,6 +285,79 @@ def download_evidence(
         media_type=evidence.mime_type,
         filename=evidence.original_filename,
         headers={"X-Evidence-SHA256": evidence.sha256, "Cache-Control": "private, no-store"},
+    )
+
+
+@router.post("/verify-all", response_model=VaultVerifyResponse)
+def verify_vault(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    """Re-hash every preserved original in the workspace and verify the audit chain."""
+    rows = list(
+        db.scalars(
+            select(Evidence).where(
+                Evidence.deleted_at.is_(None),
+                Evidence.workspace_id == workspace.id,
+            )
+        ).all()
+    )
+    verified = 0
+    mismatch = 0
+    failed = 0
+    mismatched_ids: list[uuid.UUID] = []
+    errors: list[str] = []
+    for evidence in rows:
+        try:
+            status_value = verify_evidence_integrity(
+                db,
+                evidence,
+                actor=actor_name(request),
+                ip_address=client_ip(request),
+                user_agent=user_agent(request),
+            )
+        except Exception as exc:  # noqa: BLE001 - one bad file must not stop the sweep
+            failed += 1
+            errors.append(f"{evidence.original_filename}: {exc}")
+            continue
+        if status_value == IntegrityStatus.VERIFIED:
+            verified += 1
+        else:
+            mismatch += 1
+            mismatched_ids.append(evidence.id)
+
+    chain_valid, chain_entries, broken_at = verify_chain(db)
+    record_audit(
+        db,
+        actor=actor_name(request),
+        action="Vault verified",
+        target_type="vault",
+        target_id=str(workspace.id),
+        result=AuditResult.SUCCESS if chain_valid and not mismatch and not failed else AuditResult.WARNING,
+        details={
+            "checked": len(rows),
+            "verified": verified,
+            "mismatch": mismatch,
+            "failed": failed,
+            "chainValid": chain_valid,
+            "chainEntries": chain_entries,
+            "brokenAt": broken_at,
+        },
+        ip_address=client_ip(request),
+        user_agent=user_agent(request),
+        workspace_id=workspace.id,
+    )
+    return VaultVerifyResponse(
+        checked=len(rows),
+        verified=verified,
+        mismatch=mismatch,
+        failed=failed,
+        chain_valid=chain_valid,
+        broken_at=broken_at,
+        checked_at=utcnow(),
+        mismatched_ids=mismatched_ids,
+        errors=errors[:10],
     )
 
 

@@ -10,6 +10,7 @@ from app.errors import NotFoundError
 from app.models import Entity, EventEntity, Evidence, TimelineEvent
 from app.models.enums import EntityType, EventCategory
 from app.schemas.timeline import TimelineEventOut, TimelineEventUpdate, TimelinePage, TimelinePerson
+from app.services.severity import classify_severity
 from app.utils.text import truncate
 
 
@@ -191,6 +192,9 @@ def _serialize_many(db: Session, rows: list[TimelineEvent]) -> list[TimelineEven
     for event in rows:
         evidence = evidence_map.get(event.evidence_id)
         people = people_map.get(event.id, [])
+        severity = event.severity
+        if severity == "info" and event.extraction_source != "capture":
+            severity = classify_severity(event.title, event.description, event.source_excerpt)
         output.append(
             TimelineEventOut(
                 id=event.id,
@@ -203,7 +207,7 @@ def _serialize_many(db: Session, rows: list[TimelineEvent]) -> list[TimelineEven
                 if isinstance((event.meta or {}).get("aiSummary"), dict)
                 else None,
                 category=event.category.value,
-                severity=event.severity,
+                severity=severity,
                 confidence=event.confidence,
                 evidence_id=event.evidence_id,
                 evidence_ids=[event.evidence_id],

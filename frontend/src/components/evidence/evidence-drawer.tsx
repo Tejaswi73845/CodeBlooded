@@ -9,17 +9,20 @@ import {
   Flag,
   Link2,
   Pencil,
+  RefreshCw,
+  ShieldCheck,
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/store/app-store";
-import { api, isBackendEvidenceId } from "@/lib/api";
+import { api, isBackendEvidenceId, type EvidenceAiSummary } from "@/lib/api";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { CaptureDialog } from "@/components/evidence/upload-dialog";
+import { PriorityBadge, evidencePriority } from "@/components/evidence/priority-badge";
 import { EvidencePreview } from "./evidence-preview";
 import { IntegrityBadge, StatusBadge, typeMeta } from "./file-type";
 import { PersonAvatar } from "@/components/person-avatar";
@@ -38,13 +41,41 @@ export function EvidenceDrawer() {
     deleteEvidence,
     updateCapture,
     markReviewed,
+    verifyEvidence,
   } = useApp();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [summary, setSummary] = useState<EvidenceAiSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const item = evidence.find((e) => e.id === openEvidenceId);
+
+  useEffect(() => {
+    const id = openEvidenceId;
+    if (!id || !isBackendEvidenceId(id)) {
+      setSummary(null);
+      setSummaryLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSummaryLoading(true);
+    void api
+      .evidenceSummary(id)
+      .then((result) => {
+        if (!cancelled) setSummary(result);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openEvidenceId]);
 
   if (!item) {
     return <Sheet open={false} onOpenChange={() => closeEvidence()} />;
@@ -97,6 +128,18 @@ export function EvidenceDrawer() {
     toast("No preserved file", "This demo item has no file stored on the server.", "danger");
   };
 
+  const refreshSummary = async () => {
+    if (!isBackendEvidenceId(item.id)) return;
+    setSummaryLoading(true);
+    try {
+      setSummary(await api.evidenceSummary(item.id, true));
+    } catch {
+      // keep the existing summary if regeneration fails
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   return (
     <Sheet open onOpenChange={(open) => !open && closeEvidence()}>
       <SheetContent
@@ -107,6 +150,7 @@ export function EvidenceDrawer() {
         <div className="space-y-5 px-5 py-5">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={item.status} />
+            <PriorityBadge priority={evidencePriority(item, events)} />
             <IntegrityBadge integrity={item.integrity} />
             {item.id.startsWith("local-") && <Badge tone="accent">New intake</Badge>}
             <span className="ml-auto text-[11px] text-ink-3">{formatDate(item.uploadedAt)}</span>
@@ -133,15 +177,36 @@ export function EvidenceDrawer() {
           <EvidencePreview item={item} />
 
           <div className="rounded-xl border border-line bg-surface-2 p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-accent">
-              <Sparkles className="h-3.5 w-3.5" /> AI evidence note
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-accent">
+                <Sparkles className="h-3.5 w-3.5" /> AI evidence summary
+              </div>
+              <div className="flex items-center gap-1.5">
+                {summary?.mode && (
+                  <Badge tone="neutral" className="h-[18px] text-[9px]">
+                    {summary.mode === "ai" ? "AI" : summary.mode === "extractive" ? "Extractive" : "Metadata"}
+                  </Badge>
+                )}
+                {isBackendEvidenceId(item.id) && (
+                  <button
+                    onClick={() => void refreshSummary()}
+                    aria-label="Regenerate summary"
+                    title="Regenerate summary"
+                    className="flex h-5 w-5 items-center justify-center rounded text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${summaryLoading ? "animate-spin" : ""}`} />
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="text-[12.5px] leading-relaxed text-ink-2">{item.note}</p>
-            <p className="mt-2 text-[10.5px] text-ink-3">
-              {item.id.startsWith("local-")
-                ? "Generated on intake · awaiting analyst review"
-                : "Generated from the preserved copy · confidence 91% · analyst review required"}
+            <p className="text-[12.5px] leading-relaxed text-ink-2">
+              {summaryLoading
+                ? "Summarising evidence…"
+                : summary?.summary || item.note || "No summary is available for this item."}
             </p>
+            {summary?.limitations?.[0] && (
+              <p className="mt-1.5 text-[10px] leading-relaxed text-ink-3">{summary.limitations[0]}</p>
+            )}
           </div>
 
           <section>
@@ -222,6 +287,16 @@ export function EvidenceDrawer() {
                     ? "Digest recorded at intake. Verification completes after the current pipeline stage."
                     : "Digest does not match the source manifest. Item is excluded from findings."}
               </p>
+              {isBackendEvidenceId(item.id) && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2.5"
+                  onClick={() => void verifyEvidence(item.id)}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" /> Verify integrity
+                </Button>
+              )}
             </div>
           </section>
 

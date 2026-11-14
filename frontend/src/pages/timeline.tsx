@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile } from "@/components/evidence/file-type";
+import { SeverityBadge, eventSeverityTag } from "@/components/evidence/priority-badge";
 import { EventEditDialog } from "@/components/timeline/event-edit-dialog";
 import { formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -249,7 +250,7 @@ export function TimelinePage() {
             <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Attention
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Recorded
+            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Normal
           </span>
         </span>
       </div>
@@ -337,16 +338,10 @@ export function TimelinePage() {
                             <Badge tone="neutral" className="h-[19px] text-[10px]">
                               {event.category}
                             </Badge>
-                            {event.severity === "critical" && (
-                              <Badge tone="danger" className="h-[19px] text-[10px]">
-                                Critical
-                              </Badge>
-                            )}
-                            {event.severity === "warning" && (
-                              <Badge tone="warning" className="h-[19px] text-[10px]">
-                                Attention
-                              </Badge>
-                            )}
+                            <SeverityBadge
+                              tag={eventSeverityTag(event.severity)}
+                              className="h-[19px] text-[10px]"
+                            />
                             {event.timeUncertain && (
                               <Badge tone="neutral" className="h-[19px] text-[10px]">
                                 time uncertain

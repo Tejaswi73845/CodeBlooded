@@ -248,6 +248,28 @@ export interface TimelineEventPatch {
   location?: string | null;
 }
 
+export interface VaultVerifyResult {
+  checked: number;
+  verified: number;
+  mismatch: number;
+  failed: number;
+  chainValid: boolean;
+  brokenAt?: number | null;
+  checkedAt: string;
+  mismatchedIds: string[];
+  errors: string[];
+}
+
+export interface CaseAnalysis {
+  caseTypes: Array<{ label: string; confidence: number }>;
+  summary: string;
+  unrelated: Array<{ evidenceId?: string | null; name: string; reason: string }>;
+  mode: string;
+  model?: string | null;
+  generatedAt: string;
+  limitations: string[];
+}
+
 export const api = {
   async login(email: string, password: string): Promise<AuthResult> {
     const response = await request("/api/auth/login", {
@@ -337,6 +359,26 @@ export const api = {
       throw new Error(payload?.error?.message ?? `Review update failed (HTTP ${response.status})`);
     }
     return toEvidenceItem((await response.json()) as BackendEvidence);
+  },
+  /** Re-hash every preserved original and verify the audit chain. */
+  async verifyVault(): Promise<VaultVerifyResult> {
+    const response = await request(`/api/evidence/verify-all`, { method: "POST" });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Vault verification failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as VaultVerifyResult;
+  },
+  /** Recompute one item's SHA-256 and update its integrity status. */
+  async verifyEvidence(
+    id: string,
+  ): Promise<{ integrity: string; sha256: string; verifiedAt?: string | null }> {
+    const response = await request(`/api/evidence/${id}/verify`, { method: "POST" });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Verification failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as { integrity: string; sha256: string; verifiedAt?: string | null };
   },
   /** Grounded summary of one evidence item. */
   async evidenceSummary(id: string, refresh = false): Promise<EvidenceAiSummary> {
@@ -499,6 +541,15 @@ export const api = {
     const response = await request(`/api/audit?limit=300`);
     if (!response.ok) throw new Error(`Audit request failed (HTTP ${response.status})`);
     return ((await response.json()) as { items?: BackendAuditEntry[] }).items ?? [];
+  },
+  /** Classify the case and flag out-of-scope evidence. */
+  async caseAnalysis(refresh = false): Promise<CaseAnalysis> {
+    const response = await request(`/api/reports/case-analysis${refresh ? "?refresh=true" : ""}`);
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Case analysis failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as CaseAnalysis;
   },
   /** Saved reports. */
   async reports(): Promise<BackendReport[]> {

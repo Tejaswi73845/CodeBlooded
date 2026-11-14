@@ -29,6 +29,7 @@ import {
   type BackendTimelineEvent,
   type TimelineEventPatch,
   type UploadMeta,
+  type VaultVerifyResult,
   type WorkspaceInfo,
 } from "@/lib/api";
 import { answer, type ChatMessage } from "@/lib/assistant";
@@ -78,6 +79,8 @@ interface AppContextValue {
   deleteEvidence: (id: string) => Promise<void>;
   updateCapture: (id: string, meta: UploadMeta) => Promise<void>;
   markReviewed: (id: string) => Promise<void>;
+  verifyVault: () => Promise<VaultVerifyResult | null>;
+  verifyEvidence: (id: string) => Promise<void>;
   messages: ChatMessage[];
   thinking: boolean;
   ask: (question: string) => void;
@@ -561,6 +564,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshAudit, toast],
   );
 
+  const verifyVault = useCallback(async () => {
+    try {
+      const result = await api.verifyVault();
+      await refreshEvidence();
+      void refreshAudit();
+      const issues = result.mismatch + result.failed + (result.chainValid ? 0 : 1);
+      toast(
+        result.chainValid
+          ? issues > 0
+            ? "Vault verified with issues"
+            : "Vault verified"
+          : "Audit chain broken",
+        `${result.verified}/${result.checked} files verified` +
+          (result.mismatch ? ` · ${result.mismatch} mismatch` : "") +
+          (result.failed ? ` · ${result.failed} failed` : "") +
+          ` · ledger ${result.chainValid ? "intact" : "INVALID"}`,
+        issues > 0 ? "danger" : "success",
+      );
+      return result;
+    } catch (error) {
+      toast(
+        "Vault verification failed",
+        error instanceof Error ? error.message : "Please try again.",
+        "danger",
+      );
+      return null;
+    }
+  }, [refreshAudit, refreshEvidence, toast]);
+
+  const verifyEvidence = useCallback(
+    async (id: string) => {
+      const item = evidence.find((entry) => entry.id === id);
+      try {
+        const result = await api.verifyEvidence(id);
+        const integrity = result.integrity === "verified" ? "verified" : result.integrity === "mismatch" ? "mismatch" : "pending";
+        setEvidence((prev) => prev.map((entry) => (entry.id === id ? { ...entry, integrity } : entry)));
+        void refreshAudit();
+        toast(
+          integrity === "verified" ? "Integrity verified" : "Integrity mismatch",
+          `${item?.name ?? "Item"} · SHA-256 ${integrity === "verified" ? "matches" : "does not match"} the intake digest.`,
+          integrity === "verified" ? "success" : "danger",
+        );
+      } catch (error) {
+        toast(
+          "Verification failed",
+          error instanceof Error ? error.message : "Please try again.",
+          "danger",
+        );
+      }
+    },
+    [evidence, refreshAudit, toast],
+  );
+
   const markRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   }, []);
@@ -858,6 +914,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteEvidence,
       updateCapture,
       markReviewed,
+      verifyVault,
+      verifyEvidence,
       messages,
       thinking,
       ask,
@@ -902,6 +960,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteEvidence,
       updateCapture,
       markReviewed,
+      verifyVault,
+      verifyEvidence,
       messages,
       thinking,
       ask,

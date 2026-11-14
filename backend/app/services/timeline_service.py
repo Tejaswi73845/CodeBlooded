@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import Entity, EventEntity, Evidence, EvidenceEntity, ExtractedContent, TimelineEvent
 from app.models.enums import ContentKind, EntityType, EventCategory
 from app.services.entity_service import EventCandidate
+from app.services.severity import classify_severity
 from app.utils.logging import get_logger
 from app.utils.text import clean_text, split_sentences, truncate
 from app.utils.time import find_date_expressions, parse_event_datetime
@@ -76,7 +77,7 @@ def build_timeline_for_evidence(
             title=truncate(candidate.title, 250),
             description=truncate(candidate.description, 1200),
             category=candidate.category,
-            severity=candidate.severity or _severity(candidate),
+            severity=candidate.severity if candidate.severity not in {"", "info"} else _severity(candidate),
             confidence=candidate.confidence,
             page_number=candidate.page_number,
             source_timestamp=timestamp_start,
@@ -161,12 +162,10 @@ def _categorize(text: str) -> EventCategory:
 
 
 def _severity(candidate: EventCandidate) -> str:
-    text = f"{candidate.title} {candidate.description}".lower()
-    if any(w in text for w in ("threat", "harm", "fraud", "unauthorised", "unauthorized", "transferred", "breach")):
-        return "critical"
-    if candidate.time_uncertain or any(w in text for w in ("failed", "missing", "mismatch", "unverified")):
+    severity = classify_severity(candidate.title, candidate.description, candidate.excerpt)
+    if severity == "info" and candidate.time_uncertain:
         return "warning"
-    return "info"
+    return severity
 
 
 def _resolve_timestamp(contents: list[ExtractedContent], candidate: EventCandidate) -> tuple[float | None, float | None]:

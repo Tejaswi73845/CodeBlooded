@@ -243,6 +243,7 @@ Base URL: `http://127.0.0.1:8000/api` — full reference in [backend/README.md](
 | POST | `/evidence/{id}/review` | Mark reviewed when capture details are intentionally skipped |
 | GET | `/evidence/{id}/download` | Download original (audited) |
 | PATCH | `/evidence/{id}/capture` | Correct capture details; re-sync graph + timeline |
+| POST | `/evidence/verify-all` | Re-hash every original + verify the audit chain |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256 |
 | POST | `/evidence/{id}/reprocess` | Re-run extraction |
 | DELETE | `/evidence/{id}` | Soft delete (original retained) |
@@ -254,6 +255,7 @@ Base URL: `http://127.0.0.1:8000/api` — full reference in [backend/README.md](
 | POST | `/assistant/reindex` | Backfill chunks/embeddings |
 | POST | `/reports/generate` | Generate a report |
 | GET | `/reports` · `/reports/{id}/pdf` | List / export |
+| GET | `/reports/case-analysis` | AI case-type classification, detailed summary and out-of-scope evidence |
 | GET | `/audit` · `/audit/verify` | Ledger and chain verification |
 | GET | `/health` | DB, storage and processor capabilities |
 

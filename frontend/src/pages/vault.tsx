@@ -9,6 +9,7 @@ import {
   List,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile, StatusBadge, typeMeta } from "@/components/evidence/file-type";
+import { PriorityBadge, evidencePriority } from "@/components/evidence/priority-badge";
 import { CaptureDialog } from "@/components/evidence/upload-dialog";
 import { formatBytes, formatDate, timeAgo, truncateHash } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -39,7 +41,7 @@ const typeFilters: { value: "all" | EvidenceType; label: string }[] = [
 ];
 
 export function VaultPage() {
-  const { evidence, people, uploadFiles, openEvidence, uploads, toast, deleteEvidence, markReviewed } = useApp();
+  const { evidence, people, events, uploadFiles, openEvidence, uploads, toast, deleteEvidence, markReviewed, verifyVault } = useApp();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | EvidenceType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | EvidenceStatus>("all");
@@ -50,6 +52,7 @@ export function VaultPage() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const deleteTarget = pendingDelete ? evidence.find((item) => item.id === pendingDelete) : undefined;
@@ -154,8 +157,17 @@ export function VaultPage() {
         description="Preserved originals and derived artifacts. Every item is hashed at intake and verified after processing."
         actions={
           <>
-            <Button variant="secondary" onClick={() => toast("Vault sealed", "Chain-of-custody ledger is up to date.", "success")}>
-              Verify vault
+            <Button
+              variant="secondary"
+              disabled={verifying}
+              onClick={async () => {
+                setVerifying(true);
+                await verifyVault();
+                setVerifying(false);
+              }}
+            >
+              <ShieldCheck className={cn("h-3.5 w-3.5", verifying && "animate-pulse")} />
+              {verifying ? "Verifying…" : "Verify vault"}
             </Button>
             <Button variant="primary" onClick={() => inputRef.current?.click()}>
               <Plus className="h-4 w-4" /> Upload evidence
@@ -410,7 +422,10 @@ export function VaultPage() {
                         {timeAgo(item.uploadedAt)}
                       </td>
                       <td className="px-2 py-2.5">
-                        <StatusBadge status={item.status} />
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusBadge status={item.status} />
+                          <PriorityBadge priority={evidencePriority(item, events)} />
+                        </div>
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -475,7 +490,10 @@ export function VaultPage() {
                           <span className="text-[10.5px] text-ink-3">{formatDate(item.uploadedAt)}</span>
                         )}
                       </div>
-                      <StatusBadge status={item.status} />
+                      <div className="flex items-center gap-1.5">
+                        <PriorityBadge priority={evidencePriority(item, events)} />
+                        <StatusBadge status={item.status} />
+                      </div>
                     </div>
                   </button>
                   <button
