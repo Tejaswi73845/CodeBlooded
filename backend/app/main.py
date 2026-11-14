@@ -70,7 +70,8 @@ async def lifespan(app: FastAPI):
     logger.info("Uploads: %s", settings.upload_root)
     logger.info("Database: %s", settings.database_url.split("@")[-1])
     if not ai_service.configured:
-        logger.warning("GEMINI_API_KEY is not set — AI synthesis uses deterministic extraction fallbacks.")
+        key_name = "OPENCODE_API_KEY" if settings.ai_provider == "opencode" else "GEMINI_API_KEY"
+        logger.warning("%s is not set — AI synthesis uses deterministic extraction fallbacks.", key_name)
     if not any(available_ocr_engines().values()):
         logger.warning("No OCR engine is available. Install EasyOCR or configure Gemini vision.")
     yield

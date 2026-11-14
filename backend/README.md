@@ -255,8 +255,9 @@ At question time:
 * Gemini returns **malformed JSON, blocks the request, or rejects the key/model** → HTTP 502/422 error envelope. The chatbot does **not** silently pretend an extractive answer is AI analysis.
 * Query embedding unavailable but generation reachable → lexical retrieval, Gemini answer still runs (`retrievalMode: "lexical"`).
 * No passage passes relevance → `insufficientEvidence: true`.
+* Questions about the vault itself (“latest evidence”, “how many files”, “list recent uploads”) are answered deterministically from evidence metadata with `mode: "metadata"`; they do not depend on Gemini.
 
-The chat response includes `retrievalMode` (`hybrid`/`lexical`), `chunksConsidered` and the cited `sources` with page/timestamp locators.
+If the request includes `evidenceIds` and none match active evidence, the assistant returns an explicit insufficient-evidence message naming the filter rather than claiming the workspace is empty.
 
 ## Integrity and audit
 

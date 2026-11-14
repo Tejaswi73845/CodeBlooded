@@ -236,23 +236,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMessages((prev) => [...prev, userMsg]);
       setThinking(true);
       const generation = chatGeneration.current;
-      const timer = window.setTimeout(() => {
-        if (generation !== chatGeneration.current) return;
-        const reply = answer(trimmed);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `m-${Date.now()}-r`,
-            role: "assistant",
-            text: reply.text,
-            citations: reply.citations,
-          },
-        ]);
-        setThinking(false);
-      }, 1100);
-      timers.current.push(timer);
+      answer(trimmed)
+        .then((reply) => {
+          if (generation !== chatGeneration.current) return;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `m-${Date.now()}-r`,
+              role: "assistant",
+              text: reply.text,
+              citations: reply.citations,
+            },
+          ]);
+        })
+        .catch((error: unknown) => {
+          if (generation !== chatGeneration.current) return;
+          const detail = error instanceof Error ? error.message : "Unexpected error";
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `m-${Date.now()}-r`,
+              role: "assistant",
+              text: `I couldn't reach the evidence engine.\n\n${detail}\n\nMake sure the backend is running and try again.`,
+            },
+          ]);
+          toast("Assistant unavailable", "The evidence engine could not be reached.", "danger");
+        })
+        .finally(() => {
+          if (generation === chatGeneration.current) setThinking(false);
+        });
     },
-    [],
+    [toast],
   );
 
   const clearChat = useCallback(() => {

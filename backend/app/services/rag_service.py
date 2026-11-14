@@ -77,8 +77,8 @@ def index_evidence(db: Session, evidence: Evidence, *, embed: bool = True) -> In
         chunks=len(chunks),
         model=settings.gemini_embedding_model,
     )
-    if not embed or not ai_service.configured:
-        if not ai_service.configured:
+    if not embed or not ai_service.embeddings_configured:
+        if not ai_service.embeddings_configured:
             stats.errors.append("Gemini embeddings are not configured; chunks support lexical retrieval only.")
         return stats
 
@@ -142,5 +142,5 @@ def ensure_index(db: Session, evidence_ids: list[uuid.UUID] | None = None, *, li
     for evidence_id in pending:
         evidence = db.get(Evidence, evidence_id)
         if evidence:
-            total.merge(index_evidence(db, evidence, embed=ai_service.configured))
+            total.merge(index_evidence(db, evidence, embed=ai_service.embeddings_configured))
     return total

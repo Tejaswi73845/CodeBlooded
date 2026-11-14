@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -110,6 +111,41 @@ def test_end_to_end_workflow(client: TestClient, sample_pdf: Path):
     assert irrelevant.status_code == 200
     assert irrelevant.json()["insufficientEvidence"] is True
     assert irrelevant.json()["sources"] == []
+
+    latest = client.post(
+        "/api/assistant/chat",
+        json={"question": "Can you tell me what is the latest evidence that I have uploaded?"},
+    )
+    assert latest.status_code == 200, latest.text
+    latest_body = latest.json()
+    assert latest_body["mode"] == "metadata"
+    assert latest_body["retrievalMode"] == "metadata"
+    assert latest_body["sources"]
+    assert latest_body["sources"][0]["evidenceName"]
+
+    filtered_latest = client.post(
+        "/api/assistant/chat",
+        json={
+            "question": "What is the latest evidence I uploaded?",
+            "evidenceIds": [evidence_id],
+        },
+    )
+    assert filtered_latest.status_code == 200
+    assert filtered_latest.json()["sources"][0]["evidenceId"] == evidence_id
+
+    fake_evidence = client.post(
+        "/api/assistant/chat",
+        json={
+            "question": "What is the latest evidence I uploaded?",
+            "evidenceIds": [str(uuid.uuid4())],
+        },
+    )
+    fake_body = fake_evidence.json()
+    assert fake_evidence.status_code == 200
+    assert fake_body["insufficientEvidence"] is True
+    assert "evidenceIds" in fake_body["answer"] or any(
+        "evidenceIds" in limitation for limitation in fake_body["limitations"]
+    )
 
     verify = client.post(f"/api/evidence/{evidence_id}/verify")
     assert verify.status_code == 200

@@ -5,6 +5,7 @@ import json
 import math
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -44,14 +45,30 @@ class EmbeddingResult:
 
 class AIService:
     def __init__(self) -> None:
-        self.api_key = settings.gemini_api_key
+        self.provider = settings.ai_provider
+        if self.provider == "opencode":
+            self.api_key = settings.opencode_api_key
+            self.base_url = settings.opencode_chat_base.rstrip("/")
+        else:
+            self.api_key = settings.gemini_api_key
+            self.base_url = settings.gemini_api_base.rstrip("/")
         self.model = settings.gemini_model
         self.embedding_model = settings.gemini_embedding_model
-        self.base_url = settings.gemini_api_base.rstrip("/")
+        # OpenCode Go serves no embedding models, so embeddings always use the
+        # Google Gemini API (or are skipped when no Google key is configured).
+        self.embedding_api_key = settings.gemini_api_key
+        self.embedding_base_url = settings.gemini_api_base.rstrip("/")
+        # OpenCode Go requires a stable session header per conversation plus a
+        # self-identifying user agent. We keep one session per process.
+        self.session_id = uuid.uuid4().hex
 
     @property
     def configured(self) -> bool:
         return bool(self.api_key)
+
+    @property
+    def embeddings_configured(self) -> bool:
+        return bool(self.embedding_api_key)
 
     # ── transport ────────────────────────────────────────────────────────────
     def _error_message(self, response: httpx.Response) -> str:
@@ -60,10 +77,31 @@ class AIService:
         except ValueError:
             return f"Gemini returned {response.status_code}."
 
-    def _post_json(self, url: str, body: dict[str, Any], *, attempts: int = 3) -> dict[str, Any]:
-        if not self.api_key:
+    def _headers(self, *, embedding: bool = False) -> dict[str, str]:
+        # Google's native API authenticates with x-goog-api-key; OpenCode Go
+        # uses a Bearer token on its Gemini-compatible endpoint and expects a
+        # stable session header plus a self-identifying user agent.
+        if embedding or self.provider != "opencode":
+            key = self.embedding_api_key if embedding else self.api_key
+            return {"x-goog-api-key": key, "Content-Type": "application/json"}
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "tracevault-backend/1.0",
+            "x-opencode-session": self.session_id,
+        }
+
+    def _post_json(
+        self,
+        url: str,
+        body: dict[str, Any],
+        *,
+        attempts: int = 3,
+        embedding: bool = False,
+    ) -> dict[str, Any]:
+        if not (self.embedding_api_key if embedding else self.api_key):
             raise AINotConfigured()
-        headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
+        headers = self._headers(embedding=embedding)
         last_error: str | None = None
         for attempt in range(attempts):
             try:
@@ -91,12 +129,13 @@ class AIService:
 
             if response.status_code in {401, 403}:
                 raise AIConfigurationError(
-                    "Gemini rejected the API key. Check GEMINI_API_KEY.",
+                    "The AI provider rejected the API key. "
+                    "Check OPENCODE_API_KEY (opencode provider) or GEMINI_API_KEY.",
                     {"status": response.status_code},
                 )
             if response.status_code == 404:
                 raise AIConfigurationError(
-                    "The configured Gemini model was not found for this API key.",
+                    "The configured AI model was not found for this API key.",
                     {"status": response.status_code},
                 )
             if response.status_code >= 400:
@@ -116,7 +155,7 @@ class AIService:
         return f"{self.base_url}/models/{self.model}:generateContent"
 
     def _embedding_url(self) -> str:
-        return f"{self.base_url}/models/{self.embedding_model}:batchEmbedContents"
+        return f"{self.embedding_base_url}/models/{self.embedding_model}:batchEmbedContents"
 
     # ── generation ───────────────────────────────────────────────────────────
     def generate(
@@ -203,7 +242,7 @@ class AIService:
     ) -> EmbeddingResult:
         if not texts:
             return EmbeddingResult(vectors=[], model=self.embedding_model, dimensions=0, task_type=task_type)
-        if not self.api_key:
+        if not self.embedding_api_key:
             raise AINotConfigured()
 
         prepared = [text[:8000].strip() or " " for text in texts]
@@ -230,7 +269,7 @@ class AIService:
                     for request in body["requests"]
                 ]
             try:
-                payload = self._post_json(self._embedding_url(), body)
+                payload = self._post_json(self._embedding_url(), body, embedding=True)
             except AIInvalidRequest as exc:
                 # Older embedding models may reject outputDimensionality. Retry without it once.
                 if use_dimensions and "outputdimensionality" in str(exc).lower():
@@ -239,7 +278,7 @@ class AIService:
                         {key: value for key, value in request.items() if key != "outputDimensionality"}
                         for request in body["requests"]
                     ]
-                    payload = self._post_json(self._embedding_url(), body)
+                    payload = self._post_json(self._embedding_url(), body, embedding=True)
                 else:
                     raise
 

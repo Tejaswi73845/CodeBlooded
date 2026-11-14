@@ -119,6 +119,7 @@ def rag_evidence(client):
 def test_hybrid_retrieval_prefers_semantic_match(rag_evidence, monkeypatch):
     db = rag_evidence["db"]
     monkeypatch.setattr(ai_service, "api_key", "test-key")
+    monkeypatch.setattr(ai_service, "embedding_api_key", "test-key")
     monkeypatch.setattr(ai_service, "embed_query", lambda question: [1.0, 0.0, 0.0])
     result = retrieval_service.retrieve(
         db,
@@ -134,6 +135,7 @@ def test_hybrid_retrieval_prefers_semantic_match(rag_evidence, monkeypatch):
 def test_assistant_falls_back_only_when_unavailable(rag_evidence, monkeypatch):
     db = rag_evidence["db"]
     monkeypatch.setattr(ai_service, "api_key", "test-key")
+    monkeypatch.setattr(ai_service, "embedding_api_key", "test-key")
     monkeypatch.setattr(ai_service, "embed_query", lambda question: [1.0, 0.0, 0.0])
     monkeypatch.setattr(
         ai_service,
@@ -153,6 +155,7 @@ def test_assistant_falls_back_only_when_unavailable(rag_evidence, monkeypatch):
 def test_assistant_does_not_fallback_on_malformed_response(rag_evidence, monkeypatch):
     db = rag_evidence["db"]
     monkeypatch.setattr(ai_service, "api_key", "test-key")
+    monkeypatch.setattr(ai_service, "embedding_api_key", "test-key")
     monkeypatch.setattr(ai_service, "embed_query", lambda question: [1.0, 0.0, 0.0])
     monkeypatch.setattr(
         ai_service,
@@ -170,6 +173,7 @@ def test_assistant_does_not_fallback_on_malformed_response(rag_evidence, monkeyp
 def test_irrelevant_question_is_not_evidence_backed(rag_evidence, monkeypatch):
     db = rag_evidence["db"]
     monkeypatch.setattr(ai_service, "api_key", "test-key")
+    monkeypatch.setattr(ai_service, "embedding_api_key", "test-key")
     monkeypatch.setattr(ai_service, "embed_query", lambda question: [0.0, 0.0, 1.0])
     result = retrieval_service.retrieve(
         db,
@@ -183,6 +187,7 @@ def test_irrelevant_question_is_not_evidence_backed(rag_evidence, monkeypatch):
 def test_assistant_gemini_answer_uses_retrieved_context(rag_evidence, monkeypatch):
     db = rag_evidence["db"]
     monkeypatch.setattr(ai_service, "api_key", "test-key")
+    monkeypatch.setattr(ai_service, "embedding_api_key", "test-key")
     monkeypatch.setattr(ai_service, "embed_query", lambda question: [1.0, 0.0, 0.0])
     monkeypatch.setattr(
         ai_service,

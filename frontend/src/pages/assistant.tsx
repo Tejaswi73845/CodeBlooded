@@ -191,7 +191,18 @@ export function AssistantPage() {
                           <div className="mt-2.5 flex flex-wrap gap-1">
                             {message.citations.map((id) => {
                               const item = evidence.find((e) => e.id === id);
-                              if (!item) return null;
+                              if (!item) {
+                                return (
+                                  <span
+                                    key={id}
+                                    title={id}
+                                    className="flex max-w-[210px] items-center gap-1 rounded-md border border-line bg-surface-2 px-1.5 py-0.5"
+                                  >
+                                    <FileText className="h-3 w-3 shrink-0 text-ink-3" />
+                                    <span className="truncate text-[9.5px] text-ink-2">{id}</span>
+                                  </span>
+                                );
+                              }
                               return (
                                 <button
                                   key={id}

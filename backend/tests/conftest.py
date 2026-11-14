@@ -13,6 +13,8 @@ os.environ.update(
     UPLOAD_DIR=str(_TEST_ROOT / "uploads"),
     AUTO_CREATE_TABLES="true",
     GEMINI_API_KEY="",
+    AI_PROVIDER="google",
+    OPENCODE_API_KEY="",
     OCR_ENGINE="none",
     WHISPER_MODEL="tiny",
     LOG_LEVEL="WARNING",

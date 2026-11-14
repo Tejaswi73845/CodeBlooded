@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",
+        env_ignore_empty=False,
         extra="ignore",
         case_sensitive=False,
     )
@@ -53,6 +54,14 @@ class Settings(BaseSettings):
     gemini_embedding_dimensions: int = 768
     gemini_embedding_batch_size: int = 50
 
+    # Alternative chat provider: OpenCode Go (Gemini-compatible inference gateway).
+    # Set AI_PROVIDER=opencode + OPENCODE_API_KEY to route generation through Go.
+    # Go serves no embedding models, so embeddings always use GEMINI_API_KEY
+    # (and are skipped automatically when it is empty).
+    ai_provider: str = "google"  # "google" | "opencode"
+    opencode_api_key: str | None = None
+    opencode_chat_base: str = "https://opencode.ai/inference/go/google/v1beta"
+
     # Retrieval-augmented generation
     rag_enabled: bool = True
     rag_chunk_size: int = 1200
@@ -86,7 +95,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _fallbacks(self):
-        if not self.gemini_api_key:
+        # An explicitly empty environment variable must be able to disable a
+        # value loaded from the dotenv file (notably in isolated test runs).
+        if "GEMINI_API_KEY" in os.environ:
+            self.gemini_api_key = os.environ["GEMINI_API_KEY"] or None
+        elif not self.gemini_api_key:
             self.gemini_api_key = os.getenv("GOOGLE_API_KEY") or None
         if self.demo_audio_model:
             self.whisper_model = "tiny"

@@ -131,7 +131,7 @@ Response:
 
 Render `sources` as the citation chips. When `insufficientEvidence` is true, show the answer as the empty-state explanation, not as evidence.
 
-`mode` is `gemini` or `extractive`. Extractive is only used when Gemini is not configured or cannot be reached; show the limitation text. If Gemini is reachable but returns malformed output, the API returns a 502 error envelope rather than a silent extractive answer. Handle error responses with the shared `error.message` and `error.requestId` fields.
+`mode` is `gemini`, `extractive`, or `metadata`; `retrievalMode` is `hybrid`, `lexical`, or `metadata`. Metadata answers are deterministic lookups for questions such as “what is the latest evidence?”. Extractive is only used when Gemini is not configured or cannot be reached; show the limitation text. If Gemini is reachable but returns malformed output, the API returns a 502 error envelope rather than a silent extractive answer. Handle error responses with the shared `error.message` and `error.requestId` fields.
 
 To backfill semantic search after enabling Gemini or switching embedding models:
 

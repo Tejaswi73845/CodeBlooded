@@ -10,7 +10,11 @@ from app.schemas.common import APIModel
 
 class ChatRequest(APIModel):
     question: str = Field(min_length=1, max_length=2000)
-    evidence_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    evidence_ids: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=100,
+        json_schema_extra={"example": []},
+    )
     limit: int = Field(default=8, ge=1, le=20)
 
     @field_validator("question")

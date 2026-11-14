@@ -112,7 +112,7 @@ def retrieve(
         return result
 
     query_vector: list[float] | None = None
-    if settings.rag_enabled and ai_service.configured:
+    if settings.rag_enabled and ai_service.embeddings_configured:
         try:
             query_vector = ai_service.embed_query(question)
         except AIServiceError as exc:
