@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "@/store/app-store";
-import { workspace } from "@/data/mock";
+import { workspace } from "@/lib/workspace";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

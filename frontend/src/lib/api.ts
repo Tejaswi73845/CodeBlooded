@@ -1,9 +1,7 @@
 /**
- * API seam for the future FastAPI backend.
- * Replace the mock implementations with `fetch` calls; the store and UI
- * only depend on these signatures.
+ * API client for the FastAPI backend.
+ * All case data is loaded from the server; nothing is seeded locally.
  */
-import { evidence, events, insights, people, pipeline } from "@/data/mock";
 import type { EvidenceItem } from "@/data/types";
 
 export interface UploadResult {
@@ -131,7 +129,59 @@ export interface ChatResult {
   chunksConsidered: number;
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export interface BackendEntity {
+  id: string;
+  type: string;
+  value: string;
+  normalizedValue: string;
+  confidence: number;
+  source: string;
+  mentionCount: number;
+  evidenceCount: number;
+  evidenceIds?: string[];
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+}
+
+export interface BackendTimelineEvent {
+  id: string;
+  at: string | null;
+  atRaw?: string | null;
+  timeUncertain?: boolean;
+  title: string;
+  description: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  evidenceId: string;
+  evidenceIds?: string[];
+  evidenceName?: string;
+  personIds?: string[];
+  location?: string | null;
+  extractionSource?: string;
+}
+
+export interface BackendAuditEntry {
+  id: number;
+  actor: string;
+  action: string;
+  target: string;
+  at: string;
+  ip?: string | null;
+  result: string;
+}
+
+export interface BackendReport {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  author: string;
+  createdAt: string;
+  pages: number;
+  evidenceCount: number;
+  generatedBy?: string;
+}
 
 export const api = {
   async listEvidence(): Promise<EvidenceItem[]> {
@@ -141,25 +191,9 @@ export const api = {
       const payload = (await response.json()) as { items?: BackendEvidence[] };
       return (payload.items ?? []).map(toEvidenceItem);
     } catch {
-      // Backend unreachable: keep the seeded demo vault.
-      return evidence;
+      // Backend unreachable: show an empty vault rather than fabricated data.
+      return [];
     }
-  },
-  async listPeople() {
-    await sleep(80);
-    return people;
-  },
-  async listEvents() {
-    await sleep(80);
-    return events;
-  },
-  async listInsights() {
-    await sleep(80);
-    return insights;
-  },
-  async pipeline() {
-    await sleep(60);
-    return pipeline;
   },
   /** Preserve an uploaded file on the backend with optional capture metadata. */
   async upload(file: File, meta?: UploadMeta): Promise<UploadResult> {
@@ -186,6 +220,49 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/evidence/${id}`);
     if (!response.ok) throw new Error(`Evidence request failed (HTTP ${response.status})`);
     return toEvidenceItem((await response.json()) as BackendEvidence);
+  },
+  /** Entities (people, locations, orgs…) extracted from all evidence. */
+  async entities(): Promise<BackendEntity[]> {
+    const response = await fetch(`${API_BASE}/api/entities?limit=300`);
+    if (!response.ok) throw new Error(`Entities request failed (HTTP ${response.status})`);
+    return ((await response.json()) as { items?: BackendEntity[] }).items ?? [];
+  },
+  /** Reconstructed timeline events across all evidence. */
+  async timeline(): Promise<BackendTimelineEvent[]> {
+    const response = await fetch(`${API_BASE}/api/timeline?limit=500`);
+    if (!response.ok) throw new Error(`Timeline request failed (HTTP ${response.status})`);
+    return ((await response.json()) as { items?: BackendTimelineEvent[] }).items ?? [];
+  },
+  /** Correct capture details and re-sync entities/timeline. */
+  async updateCapture(id: string, meta: UploadMeta): Promise<EvidenceItem> {
+    const response = await fetch(`${API_BASE}/api/evidence/${id}/capture`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: meta.date ?? null,
+        time: meta.time ?? null,
+        location: meta.location ?? null,
+        persons: meta.persons ?? [],
+        note: meta.note ?? null,
+      }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Update failed (HTTP ${response.status})`);
+    }
+    return toEvidenceItem((await response.json()) as BackendEvidence);
+  },
+  /** Fetch the extracted text for one evidence item (drawer preview). */
+  async evidenceText(id: string): Promise<string[]> {
+    const response = await fetch(`${API_BASE}/api/evidence/${id}`);
+    if (!response.ok) throw new Error(`Evidence request failed (HTTP ${response.status})`);
+    const payload = (await response.json()) as {
+      extractedContent?: Array<{ text?: string }>;
+    };
+    return (payload.extractedContent ?? [])
+      .map((content) => content.text ?? "")
+      .filter(Boolean)
+      .slice(0, 5);
   },
   /** Processing status for a preserved evidence item. */
   async evidenceStatus(id: string): Promise<EvidenceStatusResult> {
@@ -225,12 +302,53 @@ export const api = {
   },
   /** Remove an evidence item from the active vault (soft delete; original retained). */
   async deleteEvidence(id: string): Promise<void> {
-    // Seed items and local intakes exist only in the UI, not on the backend.
-    if (!UUID_RE.test(id)) return;
     const response = await fetch(`${API_BASE}/api/evidence/${id}`, { method: "DELETE" });
     if (!response.ok) {
       const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
       throw new Error(payload?.error?.message ?? `Delete failed (HTTP ${response.status})`);
     }
+  },
+  /** Audit ledger entries. */
+  async audit(): Promise<BackendAuditEntry[]> {
+    const response = await fetch(`${API_BASE}/api/audit?limit=300`);
+    if (!response.ok) throw new Error(`Audit request failed (HTTP ${response.status})`);
+    return ((await response.json()) as { items?: BackendAuditEntry[] }).items ?? [];
+  },
+  /** Saved reports. */
+  async reports(): Promise<BackendReport[]> {
+    const response = await fetch(`${API_BASE}/api/reports?limit=50`);
+    if (!response.ok) throw new Error(`Reports request failed (HTTP ${response.status})`);
+    return ((await response.json()) as { items?: BackendReport[] }).items ?? [];
+  },
+  /** Generate a report on the backend. */
+  async generateReport(input: { title?: string; reportType?: string }): Promise<BackendReport> {
+    const response = await fetch(`${API_BASE}/api/reports/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: input.title ?? null,
+        report_type: input.reportType ?? "incident",
+        include_ai_summary: true,
+      }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Report generation failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as BackendReport;
+  },
+  /** Download a rendered report PDF. */
+  async reportPdf(id: string, filename: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/reports/${id}/pdf`);
+    if (!response.ok) throw new Error(`Report export failed (HTTP ${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   },
 };

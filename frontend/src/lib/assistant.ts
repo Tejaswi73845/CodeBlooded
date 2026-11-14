@@ -14,10 +14,10 @@ export interface ChatMessage {
 
 export function suggestedPrompts() {
   return [
-    "Summarize this incident.",
-    "What happened on November 10?",
-    "Show all evidence involving Arjun Mehta.",
-    "Identify inconsistencies between conversations.",
+    "Summarize the preserved evidence.",
+    "What happened on the most recent dated event?",
+    "Which people or places are connected?",
+    "Identify inconsistencies between sources.",
     "Generate a chronological incident report.",
   ];
 }

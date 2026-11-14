@@ -15,8 +15,8 @@ import {
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { useApp } from "@/store/app-store";
-import { intakeSeries, workspace } from "@/data/mock";
-import type { Insight } from "@/data/types";
+import { workspace } from "@/lib/workspace";
+import type { Insight, PipelineStage } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +37,7 @@ const kindMeta = {
 };
 
 export function DashboardPage() {
-  const { evidence, people, events, insights, pipeline, navigate, openEvidence, selectPerson, ask } = useApp();
+  const { evidence, people, events, insights, navigate, openEvidence, selectPerson, ask } = useApp();
   const [activeInsight, setActiveInsight] = useState<Insight | null>(null);
 
   const recentEvidence = useMemo(
@@ -54,6 +54,62 @@ export function DashboardPage() {
   );
   const pendingReviews = evidence.filter((e) => e.status === "review" || e.status === "failed").length;
   const highRisk = people.filter((p) => p.risk === "high").length;
+  const last48h = evidence.filter((e) => Date.now() - +new Date(e.uploadedAt) < 48 * 3600 * 1000).length;
+  const criticalEvents = events.filter((e) => e.severity === "critical").length;
+  const mismatches = evidence.filter((e) => e.integrity === "mismatch").length;
+  const processingCount = evidence.filter((e) => e.status === "processing" || e.status === "queued").length;
+  const searchable = evidence.filter((e) => e.status === "processed").length;
+
+  const intakeSeries = useMemo(() => {
+    const series: { day: string; files: number }[] = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date();
+      date.setDate(date.getDate() - offset);
+      const key = date.toISOString().slice(0, 10);
+      series.push({
+        day: date.toLocaleDateString(undefined, { day: "2-digit", month: "short" }),
+        files: evidence.filter((item) => item.uploadedAt.slice(0, 10) === key).length,
+      });
+    }
+    return series;
+  }, [evidence]);
+
+  const pipeline = useMemo<PipelineStage[]>(() => {
+    const total = evidence.length;
+    const ratio = (done: number) => (total ? Math.round((done / total) * 100) : 0);
+    return [
+      {
+        label: "Preserved",
+        detail: `${total} items`,
+        progress: total ? 100 : 0,
+        state: total ? "done" : "queued",
+      },
+      {
+        label: "Text extraction",
+        detail: `${searchable} complete`,
+        progress: ratio(searchable),
+        state: processingCount > 0 ? "active" : total > 0 && searchable === total ? "done" : "queued",
+      },
+      {
+        label: "Search index",
+        detail: `${searchable} searchable`,
+        progress: ratio(searchable),
+        state: processingCount > 0 ? "active" : total > 0 && searchable === total ? "done" : "queued",
+      },
+      {
+        label: "Entity links",
+        detail: `${people.length} people`,
+        progress: people.length ? 100 : 0,
+        state: people.length ? "done" : "queued",
+      },
+      {
+        label: "Timeline",
+        detail: `${events.length} events`,
+        progress: events.length ? 100 : 0,
+        state: events.length ? "done" : "queued",
+      },
+    ];
+  }, [evidence, events.length, people.length, processingCount, searchable]);
 
   return (
     <div className="animate-fade-in">
@@ -69,7 +125,11 @@ export function DashboardPage() {
           </>
         }
         title={workspace.caseName}
-        description="Meridian Textiles · last activity 2h ago · 14 items preserved across mobile, CCTV and banking sources."
+        description={
+          evidence.length
+            ? `${evidence.length} preserved items across ${people.length} people and ${events.length} timeline events.`
+            : "No evidence preserved yet. Upload a file to begin."
+        }
         actions={
           <>
             <Button variant="secondary" onClick={() => navigate("assistant")}>
@@ -86,29 +146,29 @@ export function DashboardPage() {
         <StatCard
           label="Total evidence"
           value={evidence.length}
-          footnote="3 added in the last 48 hours"
-          trend="+3"
+          footnote={`${last48h} added in the last 48 hours`}
+          trend={last48h ? `+${last48h}` : undefined}
           icon={FileStack}
           tint="#007AFF"
         />
         <StatCard
           label="People identified"
           value={people.length}
-          footnote={`${highRisk} high-risk · 2 new connections`}
+          footnote={`${highRisk} high-risk`}
           icon={Users}
           tint="#5E5CE6"
         />
         <StatCard
           label="Events detected"
           value={events.length}
-          footnote="2 critical events require corroboration"
+          footnote={`${criticalEvents} critical events`}
           icon={CalendarDays}
           tint="#FF9F0A"
         />
         <StatCard
           label="Pending reviews"
           value={pendingReviews}
-          footnote="1 integrity mismatch awaiting re-export"
+          footnote={`${mismatches} integrity mismatch${mismatches === 1 ? "" : "es"}`}
           icon={ShieldAlert}
           tint="#FF3B30"
         />
@@ -174,6 +234,11 @@ export function DashboardPage() {
             <Badge tone="accent">{insights.filter((i) => !i.reviewed).length} new</Badge>
           </CardHeader>
           <CardContent className="mt-2 space-y-1 px-2 pb-2">
+            {insights.length === 0 && (
+              <p className="px-3 py-6 text-center text-[11.5px] leading-relaxed text-ink-3">
+                Insights appear here once evidence has been preserved and reviewed.
+              </p>
+            )}
             {insights.slice(0, 3).map((insight) => {
               const meta = kindMeta[insight.kind];
               return (
@@ -278,7 +343,7 @@ export function DashboardPage() {
           <CardHeader>
             <CardTitle>Processing status</CardTitle>
             <Badge tone="accent" dot>
-              2 active
+              {processingCount} active
             </Badge>
           </CardHeader>
           <CardContent className="mt-3 space-y-3">

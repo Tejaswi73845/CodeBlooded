@@ -4,6 +4,7 @@ import { CommandPalette } from "@/components/layout/command-palette";
 import { EvidenceDrawer } from "@/components/evidence/evidence-drawer";
 import { ToastViewport } from "@/components/ui/toast";
 import { useApp } from "@/store/app-store";
+import { workspace } from "@/lib/workspace";
 import { DashboardPage } from "@/pages/dashboard";
 import { VaultPage } from "@/pages/vault";
 import { TimelinePage } from "@/pages/timeline";
@@ -38,7 +39,7 @@ export default function App() {
         <footer className="mx-auto hidden w-full max-w-[1440px] items-center justify-between gap-4 px-4 pb-4 text-[10px] text-ink-3 sm:px-6 lg:flex lg:px-8 print:hidden">
           <span>Veritas Evidence Intelligence · Workspace Kestrel Legal</span>
           <span className="inline-flex items-center gap-3">
-            <span>Case EV-2026-0142</span>
+            <span>Case {workspace.caseId}</span>
             <span className="h-2.5 w-px bg-line" />
             <span>SHA-256 custody ledger</span>
           </span>

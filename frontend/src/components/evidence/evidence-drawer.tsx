@@ -7,6 +7,7 @@ import {
   Fingerprint,
   Flag,
   Link2,
+  Pencil,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { CaptureDialog } from "@/components/evidence/upload-dialog";
 import { EvidencePreview } from "./evidence-preview";
 import { IntegrityBadge, StatusBadge, typeMeta } from "./file-type";
 import { PersonAvatar } from "@/components/person-avatar";
@@ -33,11 +35,13 @@ export function EvidenceDrawer() {
     selectPerson,
     toast,
     deleteEvidence,
+    updateCapture,
   } = useApp();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [editing, setEditing] = useState(false);
   const item = evidence.find((e) => e.id === openEvidenceId);
 
   if (!item) {
@@ -121,9 +125,17 @@ export function EvidenceDrawer() {
           </div>
 
           <section>
-            <h4 className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
-              Metadata
-            </h4>
+            <div className="mb-2 flex items-center justify-between">
+              <h4 className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
+                Metadata
+              </h4>
+              <button
+                onClick={() => setEditing(true)}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink"
+              >
+                <Pencil className="h-3 w-3" /> Edit details
+              </button>
+            </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-xl border border-line p-3.5">
               <Meta label="File type" value={`${meta.label} · ${item.mime.split("/")[1] ?? item.mime}`} />
               <Meta label="Size" value={formatBytes(item.size)} />
@@ -323,6 +335,26 @@ export function EvidenceDrawer() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {editing && (
+        <CaptureDialog
+          open
+          mode="edit"
+          people={people}
+          initial={{
+            date: item.occurredAt ? item.occurredAt.slice(0, 10) : "",
+            time: item.occurredAt && item.occurredAt.length >= 16 ? item.occurredAt.slice(11, 16) : "",
+            location: item.location ?? "",
+            persons: item.persons ?? [],
+            note: item.captureNote ?? "",
+          }}
+          onClose={() => setEditing(false)}
+          onSubmit={async (meta) => {
+            setEditing(false);
+            await updateCapture(item.id, meta);
+          }}
+        />
+      )}
     </Sheet>
   );
 }

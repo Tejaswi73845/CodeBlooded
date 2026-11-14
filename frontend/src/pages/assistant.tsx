@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FileTypeTile } from "@/components/evidence/file-type";
 import { PersonAvatar } from "@/components/person-avatar";
-import { workspace } from "@/data/mock";
+import { workspace } from "@/lib/workspace";
 import { formatDate } from "@/lib/format";
 
 function Inline({ text }: { text: string }) {
@@ -121,11 +121,11 @@ export function AssistantPage() {
               </span>
               <div>
                 <p className="text-[12px] font-semibold leading-tight">Veritas Intelligence</p>
-                <p className="text-[10px] leading-tight text-ink-3">Case EV-2026-0142 · read-only evidence context</p>
+                <p className="text-[10px] leading-tight text-ink-3">Case {workspace.caseId} · evidence context</p>
               </div>
             </div>
             <Badge tone="neutral" className="hidden sm:inline-flex">
-              <ShieldCheck className="mr-0.5 h-3 w-3 text-success" /> No data leaves the workspace
+              <ShieldCheck className="mr-0.5 h-3 w-3 text-success" /> Evidence-grounded
             </Badge>
           </div>
 
@@ -161,7 +161,7 @@ export function AssistantPage() {
                     ))}
                   </span>
                   <p className="text-[10.5px] text-ink-3">
-                    {people.length} people, {events.length} events and {evidence.length} files indexed · updated 2h ago
+                    {people.length} people, {events.length} events and {evidence.length} files indexed
                   </p>
                 </div>
               </div>
@@ -327,9 +327,9 @@ export function AssistantPage() {
               {[
                 ["Case", workspace.caseId],
                 ["Files", `${evidence.length} preserved`],
-                ["Events", "12 reconstructed"],
-                ["People", "8 resolved"],
-                ["Integrity", "13 / 14 verified"],
+                ["Events", `${events.length} reconstructed`],
+                ["People", `${people.length} resolved`],
+                ["Integrity", `${evidence.filter((e) => e.integrity === "verified").length} / ${evidence.length} verified`],
               ].map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between">
                   <dt className="text-ink-3">{k}</dt>
@@ -379,7 +379,7 @@ export function AssistantPage() {
 
           <p className="flex items-start gap-1.5 px-1 text-[10px] leading-relaxed text-ink-3">
             <ShieldCheck className="mt-px h-3 w-3 shrink-0 text-success" />
-            Runs inside the workspace boundary. No prompts or evidence are sent to third-party services.
+            Answers are generated from preserved evidence through the configured AI provider.
           </p>
         </aside>
       </div>

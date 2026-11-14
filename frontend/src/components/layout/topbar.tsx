@@ -17,7 +17,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { SidebarContent } from "./sidebar";
 import { useApp, type View } from "@/store/app-store";
-import { workspace } from "@/data/mock";
+import { workspace } from "@/lib/workspace";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";

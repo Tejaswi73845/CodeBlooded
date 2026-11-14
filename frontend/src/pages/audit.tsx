@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApp } from "@/store/app-store";
+import { workspace } from "@/lib/workspace";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +64,7 @@ export function AuditPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "veritas-audit-log-EV-2026-0142.csv";
+    anchor.download = `veritas-audit-log-${workspace.caseId.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
     toast("Audit log exported", `${filtered.length} entries · CSV with hash manifest reference.`, "success");

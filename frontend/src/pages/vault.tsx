@@ -23,7 +23,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile, StatusBadge, typeMeta } from "@/components/evidence/file-type";
-import { UploadDialog } from "@/components/evidence/upload-dialog";
+import { CaptureDialog } from "@/components/evidence/upload-dialog";
 import { formatBytes, formatDate, timeAgo, truncateHash } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -484,7 +484,10 @@ export function VaultPage() {
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            SHA-256 verified · 1 mismatch excluded
+            {evidence.filter((item) => item.integrity === "verified").length} SHA-256 verified
+            {evidence.some((item) => item.integrity === "mismatch")
+              ? ` · ${evidence.filter((item) => item.integrity === "mismatch").length} mismatch`
+              : ""}
           </span>
         </div>
       </div>
@@ -522,21 +525,25 @@ export function VaultPage() {
         </DialogContent>
       </Dialog>
 
-      <UploadDialog
-        files={pendingFiles}
-        people={people}
-        onClose={() => setPendingFiles(null)}
-        onSubmit={(meta) => {
-          const files = pendingFiles;
-          setPendingFiles(null);
-          if (!files || files.length === 0) return;
-          uploadFiles(files, meta);
-          toast(
-            files.length > 1 ? `${files.length} files queued` : "File queued",
-            "Hashing and preserving the original before processing.",
-          );
-        }}
-      />
+      {pendingFiles !== null && (
+        <CaptureDialog
+          open
+          mode="upload"
+          files={pendingFiles}
+          people={people}
+          onClose={() => setPendingFiles(null)}
+          onSubmit={(meta) => {
+            const files = pendingFiles;
+            setPendingFiles(null);
+            if (!files || files.length === 0) return;
+            uploadFiles(files, meta);
+            toast(
+              files.length > 1 ? `${files.length} files queued` : "File queued",
+              "Hashing and preserving the original before processing.",
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

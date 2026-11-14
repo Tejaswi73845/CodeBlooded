@@ -178,6 +178,11 @@ async def store_upload(
         db.commit()
         db.refresh(evidence)
 
+        if capture_data:
+            from app.services.capture_service import sync_capture
+
+            sync_capture(db, evidence, capture_data)
+
         record_audit(
             db,
             actor=user.display_name,

@@ -17,28 +17,49 @@ function typeOf(file: File): EvidenceType {
   return "data";
 }
 
-interface UploadDialogProps {
-  files: File[] | null;
+interface CaptureDialogProps {
+  open: boolean;
   people: Person[];
+  files?: File[] | null;
+  mode?: "upload" | "edit";
+  initial?: {
+    date?: string;
+    time?: string;
+    location?: string;
+    persons?: string[];
+    note?: string;
+  };
   onClose: () => void;
   onSubmit: (meta: UploadMeta) => void;
 }
 
-export function UploadDialog({ files, people, onClose, onSubmit }: UploadDialogProps) {
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+export function CaptureDialog({
+  open,
+  people,
+  files,
+  mode = "upload",
+  initial,
+  onClose,
+  onSubmit,
+}: CaptureDialogProps) {
+  const [date, setDate] = useState(initial?.date ?? "");
+  const [time, setTime] = useState(initial?.time ?? "");
+  const [location, setLocation] = useState(initial?.location ?? "");
+  const [selected, setSelected] = useState<string[]>(initial?.persons ?? []);
   const [extra, setExtra] = useState("");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initial?.note ?? "");
   const [autoDetect, setAutoDetect] = useState(true);
+
+  const isEdit = mode === "edit";
+  const knownNames = new Set(people.map((person) => person.name));
+  const unknownPersons = selected.filter((name) => !knownNames.has(name)).join(", ");
 
   const togglePerson = (name: string) => {
     setSelected((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
   };
 
   const submit = () => {
-    const extras = extra
+    const extras = `${unknownPersons}${unknownPersons && extra ? ", " : ""}${extra}`
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
@@ -48,21 +69,25 @@ export function UploadDialog({ files, people, onClose, onSubmit }: UploadDialogP
       location: location.trim() || undefined,
       persons: Array.from(new Set([...selected, ...extras])),
       note: note.trim() || undefined,
-      autoDetect,
+      autoDetect: isEdit ? undefined : autoDetect,
     });
   };
 
   const count = files?.length ?? 0;
 
   return (
-    <Dialog open={files !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg p-5">
-        <DialogTitle className="text-[15px] font-semibold">Add evidence details</DialogTitle>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto p-5">
+        <DialogTitle className="text-[15px] font-semibold">
+          {isEdit ? "Edit evidence details" : "Add evidence details"}
+        </DialogTitle>
         <DialogDescription className="mt-1 text-[12px] leading-relaxed text-ink-2">
-          Record when and where this item was captured. These details are stored with the preserved file.
+          {isEdit
+            ? "Correct the date, location or people attached to this item. Saving updates the timeline and connection graph."
+            : "Record when and where this item was captured. These details are stored with the preserved file."}
         </DialogDescription>
 
-        {files && files.length > 0 && (
+        {!isEdit && files && files.length > 0 && (
           <div className="mt-3 max-h-28 space-y-1 overflow-y-auto rounded-lg border border-line bg-surface-2 p-2">
             {files.map((file) => (
               <div key={file.name} className="flex items-center gap-2 text-[11.5px]">
@@ -75,16 +100,16 @@ export function UploadDialog({ files, people, onClose, onSubmit }: UploadDialogP
         )}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Date" hint="Leave blank to auto-detect from the file.">
+          <Field label="Date" hint={isEdit ? "Clear to remove the date." : "Leave blank to auto-detect from the file."}>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          <Field label="Time" hint="Leave blank to auto-detect from the file.">
+          <Field label="Time" hint={isEdit ? "Clear to remove the time." : "Leave blank to auto-detect from the file."}>
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </Field>
         </div>
 
         <div className="mt-3">
-          <Field label="Location" hint="Leave blank to auto-detect from the file.">
+          <Field label="Location" hint={isEdit ? "Clear to remove the location." : "Leave blank to auto-detect from the file."}>
             <Input
               value={location}
               onChange={(e) => setLocation(e.target.value)}
@@ -136,28 +161,30 @@ export function UploadDialog({ files, people, onClose, onSubmit }: UploadDialogP
           </Field>
         </div>
 
-        <label className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-surface-2 p-2.5 text-[12px] leading-relaxed text-ink-2">
-          <input
-            type="checkbox"
-            checked={autoDetect}
-            onChange={(e) => setAutoDetect(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 shrink-0"
-          />
-          <span>
-            Auto-detect missing details from the file
-            <span className="block text-[11px] text-ink-3">
-              Date, time, location and people are read from the file after processing. Anything you enter
-              above is kept as-is.
+        {!isEdit && (
+          <label className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-surface-2 p-2.5 text-[12px] leading-relaxed text-ink-2">
+            <input
+              type="checkbox"
+              checked={autoDetect}
+              onChange={(e) => setAutoDetect(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+            />
+            <span>
+              Auto-detect missing details from the file
+              <span className="block text-[11px] text-ink-3">
+                Date, time, location and people are read from the file after processing. Anything you enter
+                above is kept as-is.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
           <Button variant="primary" size="sm" onClick={submit}>
-            Preserve {count} file{count === 1 ? "" : "s"}
+            {isEdit ? "Save details" : `Preserve ${count} file${count === 1 ? "" : "s"}`}
           </Button>
         </div>
       </DialogContent>

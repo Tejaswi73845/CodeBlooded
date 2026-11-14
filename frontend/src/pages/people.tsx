@@ -191,40 +191,16 @@ export function PeoplePage() {
 
   const graph = useMemo(() => {
     const nodes: Node<GraphNodeData>[] = [];
-    people.forEach((p) => {
+    people.forEach((p, index) => {
+      const fallbackAngle = (index / Math.max(people.length, 1)) * Math.PI * 2;
+      const fallback = { x: 560 + Math.cos(fallbackAngle) * 340, y: 380 + Math.sin(fallbackAngle) * 300 };
       nodes.push({
         id: `g-${p.id}`,
         type: "person",
-        position: positions[`g-${p.id}`] ?? { x: 0, y: 0 },
+        position: positions[`g-${p.id}`] ?? fallback,
         data: { id: p.id, kind: "person", label: p.name, sublabel: p.role, tint: p.tint, risk: p.risk, personId: p.id, evidenceIds: evidence.filter((e) => e.personIds.includes(p.id)).map((e) => e.id) },
         width: 184,
         hidden: !visibleKinds.person,
-      });
-    });
-
-    const entities: { id: string; kind: "phone" | "email" | "conversation" | "event"; label: string; sublabel?: string; personId?: string; evidenceIds: string[] }[] = [
-      { id: "g-phone1", kind: "phone", label: "+91 98200 41127", sublabel: "Subscriber · Arjun Mehta", personId: "p1", evidenceIds: ["ev-01", "ev-08"] },
-      { id: "g-email1", kind: "email", label: "arjun.mehta@proton.me", sublabel: "Email identity", personId: "p1", evidenceIds: ["ev-06"] },
-      { id: "g-phone5", kind: "phone", label: "+91 90040 51279", sublabel: "Subscriber · Vikram Rao", personId: "p5", evidenceIds: ["ev-08", "ev-10"] },
-      { id: "g-email4", kind: "email", label: "neha.verma88@gmail.com", sublabel: "Email identity", personId: "p4", evidenceIds: ["ev-11"] },
-      { id: "g-phone2", kind: "phone", label: "+91 98330 77204", sublabel: "Subscriber · Priya Sharma", personId: "p2", evidenceIds: ["ev-08"] },
-      { id: "g-conv1", kind: "conversation", label: "Vendor WhatsApp", sublabel: "1,284 messages · 8–10 Nov", evidenceIds: ["ev-01", "ev-06"] },
-      { id: "g-conv2", kind: "conversation", label: "Instagram DM", sublabel: "Device swap exchange", evidenceIds: ["ev-11"] },
-      { id: "g-conv3", kind: "conversation", label: "Vendor email thread", sublabel: "Spoofed reply-to domain", evidenceIds: ["ev-06"] },
-      { id: "g-event1", kind: "event", label: "Threat received", sublabel: "10 Nov · 22:14", evidenceIds: ["ev-02"] },
-      { id: "g-event2", kind: "event", label: "₹18.5L transferred", sublabel: "11 Nov · 08:05", evidenceIds: ["ev-05", "ev-07"] },
-      { id: "g-event3", kind: "event", label: "Parking lot meeting", sublabel: "11 Nov · 17:20", evidenceIds: ["ev-13"] },
-      { id: "g-event4", kind: "event", label: "Statement recorded", sublabel: "9 Nov · 11:20", evidenceIds: ["ev-04"] },
-    ];
-
-    entities.forEach((e) => {
-      nodes.push({
-        id: e.id,
-        type: "entity",
-        position: positions[e.id] ?? { x: 0, y: 0 },
-        data: { ...e, kind: e.kind },
-        width: 176,
-        hidden: !visibleKinds[e.kind],
       });
     });
 
@@ -248,32 +224,26 @@ export function PeoplePage() {
         !visibleKinds[nodes.find((n) => n.id === target)?.data.kind ?? "person"],
     });
 
-    const edges: Edge[] = [
-      edge("e1", "g-p2", "g-conv1"),
-      edge("e2", "g-p1", "g-conv1"),
-      edge("e3", "g-p1", "g-phone1"),
-      edge("e4", "g-p1", "g-email1"),
-      edge("e5", "g-p2", "g-phone2"),
-      edge("e6", "g-p2", "g-conv3"),
-      edge("e7", "g-p1", "g-conv3"),
-      edge("e8", "g-p2", "g-event1"),
-      edge("e9", "g-p2", "g-event2"),
-      edge("e10", "g-p5", "g-event2", "money"),
-      edge("e11", "g-p5", "g-phone5"),
-      edge("e12", "g-p5", "g-p7"),
-      edge("e13", "g-p5", "g-event3"),
-      edge("e14", "g-p1", "g-event3"),
-      edge("e15", "g-p4", "g-event3"),
-      edge("e16", "g-p7", "g-event3"),
-      edge("e17", "g-p1", "g-p4", "device"),
-      edge("e18", "g-p4", "g-conv2"),
-      edge("e19", "g-p1", "g-conv2", "device"),
-      edge("e20", "g-p4", "g-email4"),
-      edge("e21", "g-p6", "g-p2"),
-      edge("e22", "g-p8", "g-p2"),
-      edge("e23", "g-p3", "g-event3"),
-      edge("e24", "g-p2", "g-event4"),
-    ];
+    const edges: Edge[] = [];
+
+    // Connect detected people who appear in the same evidence item.
+    const isDetected = (id: string) => !/^p\d+$/.test(id);
+    const peopleByEvidence = new Map<string, string[]>();
+    people.forEach((p) => {
+      evidence.forEach((e) => {
+        if (!e.personIds.includes(p.id)) return;
+        const list = peopleByEvidence.get(e.id) ?? [];
+        list.push(`g-${p.id}`);
+        peopleByEvidence.set(e.id, list);
+      });
+    });
+    for (const [evidenceId, ids] of peopleByEvidence) {
+      const unique = Array.from(new Set(ids));
+      if (!unique.some((id) => isDetected(id.replace("g-", "")))) continue;
+      for (let index = 1; index < unique.length; index += 1) {
+        edges.push(edge(`dyn-${evidenceId}-${index}`, unique[0], unique[index]));
+      }
+    }
 
     return { nodes, edges };
   }, [people, evidence, visibleKinds]);
@@ -320,9 +290,9 @@ export function PeoplePage() {
         eyebrow={
           <>
             <Badge tone="violet" dot>
-              8 people · 23 connections
+              {people.length} people · {graph.edges.length} connections
             </Badge>
-            <span className="text-[11px] text-ink-3">2 device links · 1 financial flow</span>
+            <span className="text-[11px] text-ink-3">{evidence.length} evidence items linked</span>
           </>
         }
         title="People & Connections"
@@ -571,13 +541,10 @@ export function PeoplePage() {
 
         <div className="mx-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-line bg-surface-2 px-3 py-2 text-[10.5px] text-ink-3 lg:absolute lg:bottom-3 lg:left-3 lg:z-10 lg:m-0 lg:bg-surface/95 lg:shadow-card lg:backdrop-blur">
           <span className="inline-flex items-center gap-1">
-            <Users className="h-3 w-3" /> <b className="font-semibold text-ink-2">8</b> people
+            <Users className="h-3 w-3" /> <b className="font-semibold text-ink-2">{people.length}</b> people
           </span>
           <span>
-            <b className="font-semibold text-ink-2">23</b> connections
-          </span>
-          <span>
-            <b className="font-semibold text-ink-2">2</b> device links
+            <b className="font-semibold text-ink-2">{graph.edges.length}</b> connections
           </span>
           <span className="hidden sm:inline">Select a node to inspect its evidence</span>
         </div>

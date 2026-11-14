@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile } from "@/components/evidence/file-type";
-import { formatTime } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const categories: { value: "all" | EventCategory; label: string }[] = [
@@ -84,9 +84,15 @@ export function TimelinePage() {
         eyebrow={
           <>
             <Badge tone="accent" dot>
-              Reconstructed from 14 sources
+              Reconstructed from {evidence.length} sources
             </Badge>
-            <span className="text-[11px] text-ink-3">8–13 November 2026</span>
+            <span className="text-[11px] text-ink-3">
+              {events.length > 0
+                ? `${formatDate(new Date(Math.min(...events.map((event) => +new Date(event.at)))).toISOString())} – ${formatDate(
+                    new Date(Math.max(...events.map((event) => +new Date(event.at)))).toISOString(),
+                  )}`
+                : "No dated events yet"}
+            </span>
           </>
         }
         title="Incident Timeline"

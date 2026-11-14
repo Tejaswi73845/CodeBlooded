@@ -25,6 +25,7 @@ from app.models import (
 from app.models.enums import AuditResult, ContentKind, EntityType, EvidenceStatus, ProcessingStage
 from app.services.audit_service import record_audit
 from app.services.audio_service import probe_media, transcribe_audio
+from app.services.capture_service import sync_capture
 from app.services.entity_service import ExtractionResult, extract_entities_for_evidence
 from app.services.integrity_service import verify_evidence_integrity
 from app.services.ocr_service import extract_image_text
@@ -122,6 +123,10 @@ def _process_evidence(evidence_id: str) -> None:
         if (evidence.meta or {}).get("captureAutoDetect") and _detect_capture(evidence, extraction):
             db.add(evidence)
             db.commit()
+
+        capture = (evidence.meta or {}).get("capture")
+        if capture:
+            sync_capture(db, evidence, capture)
 
         set_stage(db, evidence, ProcessingStage.INTEGRITY_CHECK, 94)
         integrity = verify_evidence_integrity(db, evidence, actor="System")

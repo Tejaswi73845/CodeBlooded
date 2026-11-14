@@ -14,15 +14,18 @@ from app.errors import AppError
 from app.models import Evidence
 from app.models.enums import AuditResult, EvidenceStatus, ProcessingStage
 from app.schemas.evidence import (
+    CaptureUpdate,
     DuplicateWarning,
     EvidenceDetail,
     EvidencePage,
+    EvidenceSummary,
     StatusResponse,
     UploadError,
     UploadResponse,
 )
 from app.services import evidence_service, file_service
 from app.services.audit_service import record_audit
+from app.services.capture_service import sync_capture
 from app.services.integrity_service import verify_evidence_integrity
 from app.services.pipeline_service import process_evidence
 from app.utils.http import actor_name, client_ip, optional_uuid, user_agent
@@ -295,3 +298,42 @@ def delete_evidence(evidence_id: uuid.UUID, request: Request, db: Session = Depe
     evidence = file_service.get_active_evidence(db, evidence_id)
     file_service.soft_delete(db, evidence, actor=actor_name(request), ip=client_ip(request))
     return {"id": str(evidence_id), "deleted": True, "originalRetained": True}
+
+
+@router.patch("/{evidence_id}/capture", response_model=EvidenceSummary)
+def update_capture(
+    evidence_id: uuid.UUID,
+    payload: CaptureUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Correct the analyst/auto-detected capture details and re-sync entities and timeline."""
+    evidence = file_service.get_active_evidence(db, evidence_id)
+    capture = _capture_metadata(
+        captured_date=payload.date,
+        captured_time=payload.time,
+        location=payload.location,
+        persons=json.dumps(payload.persons) if payload.persons else None,
+        note=payload.note,
+    )
+    capture = {key: value for key, value in capture.items() if value}
+    evidence.meta = {**(evidence.meta or {}), "capture": capture}
+    db.add(evidence)
+    db.commit()
+    sync_capture(db, evidence, capture)
+    record_audit(
+        db,
+        actor=actor_name(request),
+        action="Evidence details updated",
+        target_type="evidence",
+        target_id=str(evidence.id),
+        details={
+            "filename": evidence.original_filename,
+            "occurredAt": capture.get("occurredAt"),
+            "location": capture.get("location"),
+            "persons": capture.get("persons"),
+        },
+        ip_address=client_ip(request),
+        user_agent=user_agent(request),
+    )
+    return evidence_service.serialize_evidence(db, evidence)

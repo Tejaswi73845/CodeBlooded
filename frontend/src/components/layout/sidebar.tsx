@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useApp, type View } from "@/store/app-store";
 import { cn } from "@/lib/utils";
-import { workspace } from "@/data/mock";
+import { workspace } from "@/lib/workspace";
 
 const navigation: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
@@ -48,7 +48,7 @@ export function Brand() {
 }
 
 function WorkspaceSwitch() {
-  const { toast } = useApp();
+  const { toast, evidence } = useApp();
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -75,19 +75,19 @@ function WorkspaceSwitch() {
           </DropdownMenu.Label>
           <DropdownMenu.Item
             className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
-            onSelect={() => toast("Workspace", "Already viewing Kestrel Legal.")}
+            onSelect={() => toast("Workspace", `Already viewing ${workspace.name}.`)}
           >
             <Check className="h-3.5 w-3.5 text-accent" />
-            <span className="flex-1">Kestrel Legal</span>
-            <span className="text-[11px] text-ink-3">14 files</span>
+            <span className="flex-1">{workspace.name}</span>
+            <span className="text-[11px] text-ink-3">{evidence.length} files</span>
           </DropdownMenu.Item>
           <DropdownMenu.Item
             className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] outline-none data-[highlighted]:bg-surface-3"
-            onSelect={() => toast("Sandbox environment", "Demo workspace — data is synthetic.")}
+            onSelect={() => toast("Sandbox environment", "This environment is not configured.")}
           >
             <span className="h-3.5 w-3.5" />
             <span className="flex-1">Training Sandbox</span>
-            <span className="text-[11px] text-ink-3">3 files</span>
+            <span className="text-[11px] text-ink-3">0 files</span>
           </DropdownMenu.Item>
           <DropdownMenu.Separator className="my-1 h-px bg-line" />
           <DropdownMenu.Item

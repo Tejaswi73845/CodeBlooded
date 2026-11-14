@@ -85,6 +85,14 @@ class DuplicateWarning(APIModel):
     kind: str = "exact"
 
 
+class CaptureUpdate(APIModel):
+    date: str | None = Field(default=None, max_length=32)
+    time: str | None = Field(default=None, max_length=32)
+    location: str | None = Field(default=None, max_length=300)
+    persons: list[str] = Field(default_factory=list, max_length=20)
+    note: str | None = Field(default=None, max_length=2000)
+
+
 class UploadError(APIModel):
     filename: str
     error: str

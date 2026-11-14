@@ -9,9 +9,10 @@ import {
   Printer,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/store/app-store";
-import { people as seedPeople, reportPreview, reports as seedReports, workspace } from "@/data/mock";
+import { api, type BackendReport } from "@/lib/api";
+import { workspace } from "@/lib/workspace";
 import type { ReportRecord } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/segmented";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/input";
-import { formatDate, formatDateTime, formatTime, truncateHash } from "@/lib/format";
+import { formatBytes, formatDate, formatDateTime, formatTime, truncateHash } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type SectionKey = "summary" | "findings" | "chronology" | "people" | "evidence" | "integrity";
@@ -39,8 +40,23 @@ const statusTone = {
   Review: "warning",
 } as const;
 
+function toReportRecord(report: BackendReport): ReportRecord {
+  const status: ReportRecord["status"] =
+    report.status === "Final" || report.status === "Review" ? report.status : "Draft";
+  return {
+    id: report.id,
+    title: report.title,
+    type: report.type,
+    status,
+    createdAt: report.createdAt,
+    pages: report.pages,
+    author: report.author,
+    evidenceCount: report.evidenceCount,
+  };
+}
+
 export function ReportsPage() {
-  const { evidence, events, insights, toast, openEvidence } = useApp();
+  const { evidence, events, insights, toast, openEvidence, people } = useApp();
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     summary: true,
     findings: true,
@@ -49,44 +65,93 @@ export function ReportsPage() {
     evidence: true,
     integrity: true,
   });
-  const [reports, setReports] = useState<ReportRecord[]>(seedReports);
+  const [reports, setReports] = useState<ReportRecord[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [title, setTitle] = useState("Incident Summary — EV-2026-0142");
+  const [title, setTitle] = useState("Incident summary");
   const [template, setTemplate] = useState("incident");
-  const [activeReport, setActiveReport] = useState(seedReports[0].id);
+  const [activeReport, setActiveReport] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .reports()
+      .then((items) => {
+        if (cancelled) return;
+        const mapped = items.map(toReportRecord);
+        setReports(mapped);
+        setActiveReport((current) => current ?? mapped[0]?.id ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const active = reports.find((report) => report.id === activeReport) ?? reports[0] ?? null;
 
   const chronology = useMemo(() => [...events].sort((a, b) => +new Date(a.at) - +new Date(b.at)), [events]);
   const involved = useMemo(
-    () => seedPeople.filter((p) => evidence.some((e) => e.personIds.includes(p.id))),
-    [evidence],
+    () => people.filter((p) => evidence.some((e) => e.personIds.includes(p.id))),
+    [evidence, people],
   );
   const inconsistencies = insights.filter((i) => i.kind === "anomaly" || i.kind === "link");
 
-  const generate = () => {
+  const preview = useMemo(() => {
+    const total = evidence.length;
+    const verified = evidence.filter((e) => e.integrity === "verified").length;
+    const failed = evidence.filter((e) => e.integrity === "mismatch").length;
+    return {
+      title: active?.title ?? "Incident summary",
+      caseId: workspace.caseId,
+      preparedFor: workspace.name,
+      preparedBy: workspace.analyst,
+      generatedAt: active?.createdAt ?? new Date().toISOString(),
+      summary: [
+        `${total} evidence item(s) preserved, covering ${people.length} identified people and ${events.length} timeline events.`,
+        `${verified} of ${total} item(s) verified against their SHA-256 custody digest.`,
+        inconsistencies.length
+          ? `${inconsistencies.length} analytical finding(s) recorded for review.`
+          : "No analytical findings have been recorded yet.",
+      ],
+      integrity: { verified, total, failed, algorithm: "SHA-256", ledger: "chained custody ledger" },
+    };
+  }, [active, evidence, events.length, inconsistencies.length, people.length]);
+
+  const generate = async () => {
     setGenerating(true);
-    window.setTimeout(() => {
-      const record: ReportRecord = {
-        id: `r-${Date.now()}`,
-        title: title.trim() || "Untitled report",
-        type: template === "incident" ? "Incident summary" : template === "chronology" ? "Timeline" : "Custom",
-        status: "Draft",
-        createdAt: new Date().toISOString(),
-        pages: 12,
-        author: workspace.analyst,
-        evidenceCount: evidence.length,
-      };
-      setReports((prev) => [record, ...prev]);
-      setActiveReport(record.id);
-      setGenerating(false);
+    try {
+      const record = await api.generateReport({
+        title: title.trim() || undefined,
+        reportType: template === "chronology" ? "chronology" : template === "custom" ? "custom" : "incident",
+      });
+      const mapped = toReportRecord(record);
+      setReports((prev) => [mapped, ...prev]);
+      setActiveReport(mapped.id);
       setDialogOpen(false);
-      toast("Report generated", `${record.title} · ${record.pages} pages · draft saved.`, "success");
-    }, 1300);
+      toast("Report generated", `${mapped.title} saved.`, "success");
+    } catch (error) {
+      toast(
+        "Report failed",
+        error instanceof Error ? error.message : "The report could not be generated.",
+        "danger",
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const exportPdf = () => {
-    toast("Preparing PDF", "Rendering report with evidence references and integrity hashes…", "success");
-    window.setTimeout(() => window.print(), 400);
+  const exportPdf = async () => {
+    if (!active) {
+      toast("No report", "Generate a report first.", "danger");
+      return;
+    }
+    try {
+      await api.reportPdf(active.id, `${active.title}.pdf`);
+      toast("Report exported", `${active.title} · PDF downloaded.`, "success");
+    } catch {
+      window.print();
+    }
   };
 
   return (
@@ -144,20 +209,20 @@ export function ReportsPage() {
                   <span className="text-[10px] text-ink-3">· Kestrel Legal</span>
                 </div>
                 <h2 className="mt-3 max-w-lg text-[21px] font-semibold leading-tight tracking-[-0.025em] sm:text-[24px]">
-                  {reportPreview.title}
+                  {preview.title}
                 </h2>
                 <p className="mt-1.5 text-[11.5px] text-ink-2">
-                  Matter {reportPreview.caseId} · Digital evidence intelligence report
+                  Matter {preview.caseId} · Digital evidence intelligence report
                 </p>
               </div>
               <div className="text-left text-[10.5px] leading-relaxed text-ink-3 sm:text-right">
                 <p>
-                  Prepared for <span className="font-medium text-ink-2">{reportPreview.preparedFor}</span>
+                  Prepared for <span className="font-medium text-ink-2">{preview.preparedFor}</span>
                 </p>
                 <p>
-                  Prepared by <span className="font-medium text-ink-2">{reportPreview.preparedBy}</span>
+                  Prepared by <span className="font-medium text-ink-2">{preview.preparedBy}</span>
                 </p>
-                <p>Generated {formatDateTime(reportPreview.generatedAt)} IST</p>
+                <p>Generated {formatDateTime(preview.generatedAt)} IST</p>
               </div>
             </header>
 
@@ -166,7 +231,7 @@ export function ReportsPage() {
                 <section>
                   <SectionTitle index="01" title="Incident summary" />
                   <div className="mt-2.5 space-y-2.5">
-                    {reportPreview.summary.map((p, i) => (
+                    {preview.summary.map((p, i) => (
                       <p key={i} className="text-[12.5px] leading-[1.75] text-ink-2">
                         {p}
                       </p>
@@ -174,8 +239,8 @@ export function ReportsPage() {
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {[
-                      ["Amount diverted", "₹18,50,000"],
-                      ["Window", "8–13 Nov 2026"],
+                      ["Total size", formatBytes(evidence.reduce((sum, item) => sum + item.size, 0))],
+                      ["People", `${people.length} identified`],
                       ["Evidence items", `${evidence.length} preserved`],
                     ].map(([k, v]) => (
                       <div key={k} className="rounded-lg border border-line bg-surface-2 px-3 py-2">
@@ -259,7 +324,7 @@ export function ReportsPage() {
                             </td>
                             <td className="hidden px-3 py-1.5 text-[10px] text-ink-2 sm:table-cell">{event.category}</td>
                             <td className="hidden max-w-[150px] truncate px-3 py-1.5 text-[10px] text-ink-2 md:table-cell">
-                              {seedPeople
+                              {people
                                 .filter((p) => event.personIds.includes(p.id))
                                 .map((p) => p.name)
                                 .join(", ")}
@@ -370,18 +435,20 @@ export function ReportsPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-[11.5px] font-medium">
-                          {reportPreview.integrity.verified} of {reportPreview.integrity.total} items verified
+                          {preview.integrity.verified} of {preview.integrity.total} items verified
                           <span className="ml-2 font-normal text-danger">
-                            {reportPreview.integrity.failed} mismatch excluded
+                            {preview.integrity.failed} mismatch excluded
                           </span>
                         </p>
                         <p className="mt-1 text-[10.5px] leading-relaxed text-ink-2">
-                          All items were hashed with {reportPreview.integrity.algorithm} at intake and re-verified
-                          after processing. Excluded: Chat_Export_Telegram_Arjun.json — truncated export, 41% of
-                          the message table missing.
+                          All items were hashed with {preview.integrity.algorithm} at intake and re-verified
+                          after processing.
+                          {preview.integrity.failed > 0
+                            ? ` ${preview.integrity.failed} item(s) failed verification and are excluded from findings.`
+                            : " No integrity mismatches were detected."}
                         </p>
                         <p className="mt-1.5 font-mono text-[9.5px] text-ink-3">
-                          {reportPreview.integrity.ledger}
+                          {preview.integrity.ledger}
                         </p>
                       </div>
                     </div>
@@ -391,7 +458,7 @@ export function ReportsPage() {
             </div>
 
             <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[9px] text-ink-3">
-              <span>Confidential · Prepared for legal proceedings · {reportPreview.caseId}</span>
+              <span>Confidential · Prepared for legal proceedings · {preview.caseId}</span>
               <span className="font-mono">SEALED 13 NOV 2026 · 17:04 IST</span>
             </footer>
           </div>
