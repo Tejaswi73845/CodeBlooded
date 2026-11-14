@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  CheckCheck,
   Copy,
   Download,
   FilePlus2,
@@ -36,6 +37,7 @@ export function EvidenceDrawer() {
     toast,
     deleteEvidence,
     updateCapture,
+    markReviewed,
   } = useApp();
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -109,6 +111,24 @@ export function EvidenceDrawer() {
             {item.id.startsWith("local-") && <Badge tone="accent">New intake</Badge>}
             <span className="ml-auto text-[11px] text-ink-3">{formatDate(item.uploadedAt)}</span>
           </div>
+
+          {item.needsReview && (
+            <div className="rounded-xl border border-warning/30 bg-warning/10 p-3">
+              <p className="text-[11.5px] font-medium">Capture details need review</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-2">
+                Missing: {item.missingCapture?.join(", ") || "capture details"}. Add them with
+                <span className="font-medium text-ink"> Edit details</span>, or skip this check.
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-2"
+                onClick={() => void markReviewed(item.id)}
+              >
+                <CheckCheck className="h-3.5 w-3.5" /> Mark as reviewed
+              </Button>
+            </div>
+          )}
 
           <EvidencePreview item={item} />
 

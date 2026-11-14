@@ -353,6 +353,32 @@ def delete_evidence(
     return {"id": str(evidence_id), "deleted": True, "originalRetained": True}
 
 
+@router.post("/{evidence_id}/review", response_model=EvidenceSummary)
+def mark_reviewed(
+    evidence_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    """Skip the capture-detail review and mark the item as processed."""
+    evidence = _scoped_evidence(db, evidence_id, workspace)
+    evidence.meta = {**(evidence.meta or {}), "captureReviewed": True}
+    db.add(evidence)
+    db.commit()
+    record_audit(
+        db,
+        actor=actor_name(request),
+        action="Evidence review completed",
+        target_type="evidence",
+        target_id=str(evidence.id),
+        details={"filename": evidence.original_filename},
+        ip_address=client_ip(request),
+        user_agent=user_agent(request),
+        workspace_id=workspace.id,
+    )
+    return evidence_service.serialize_evidence(db, evidence)
+
+
 @router.patch("/{evidence_id}/capture", response_model=EvidenceSummary)
 def update_capture(
     evidence_id: uuid.UUID,
@@ -371,7 +397,7 @@ def update_capture(
         note=payload.note,
     )
     capture = {key: value for key, value in capture.items() if value}
-    evidence.meta = {**(evidence.meta or {}), "capture": capture}
+    evidence.meta = {**(evidence.meta or {}), "capture": capture, "captureReviewed": False}
     db.add(evidence)
     db.commit()
     sync_capture(db, evidence, capture)

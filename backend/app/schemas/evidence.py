@@ -74,6 +74,8 @@ class EvidenceSummary(APIModel):
     persons: list[str] = Field(default_factory=list)
     capture_note: str | None = None
     capture_detected: list[str] = Field(default_factory=list)
+    needs_review: bool = False
+    missing_capture: list[str] = Field(default_factory=list)
 
 
 class DuplicateWarning(APIModel):

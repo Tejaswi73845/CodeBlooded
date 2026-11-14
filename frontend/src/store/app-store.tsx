@@ -77,6 +77,7 @@ interface AppContextValue {
   uploadFiles: (files: File[], meta?: UploadMeta) => void;
   deleteEvidence: (id: string) => Promise<void>;
   updateCapture: (id: string, meta: UploadMeta) => Promise<void>;
+  markReviewed: (id: string) => Promise<void>;
   messages: ChatMessage[];
   thinking: boolean;
   ask: (question: string) => void;
@@ -116,6 +117,8 @@ function inferType(file: File): EvidenceType {
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("audio/")) return "audio";
   if (file.type === "application/pdf") return "document";
+  if (/\.(mp4|m4v|mov|mkv|webm|avi|wmv|flv|mpg|mpeg|3gp|ogv)$/i.test(file.name)) return "video";
+  if (/\.(mp3|wav|m4a|aac|flac|ogg|opus|aiff|aif|wma|amr)$/i.test(file.name)) return "audio";
   if (/\.(csv|json|xlsx|xls)$/i.test(file.name)) return "data";
   if (/(chat|whatsapp|telegram|export|messages?)/i.test(file.name)) return "chat";
   return "data";
@@ -540,6 +543,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshAudit, refreshConnections, toast],
   );
 
+  const markReviewed = useCallback(
+    async (id: string) => {
+      try {
+        const fresh = await api.markEvidenceReviewed(id);
+        setEvidence((prev) => prev.map((entry) => (entry.id === id ? { ...fresh, url: entry.url } : entry)));
+        void refreshAudit();
+        toast("Marked as reviewed", "The item no longer needs a capture-detail review.", "success");
+      } catch (error) {
+        toast(
+          "Could not update review",
+          error instanceof Error ? error.message : "Please try again.",
+          "danger",
+        );
+      }
+    },
+    [refreshAudit, toast],
+  );
+
   const markRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   }, []);
@@ -836,6 +857,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       uploadFiles,
       deleteEvidence,
       updateCapture,
+      markReviewed,
       messages,
       thinking,
       ask,
@@ -879,6 +901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       uploadFiles,
       deleteEvidence,
       updateCapture,
+      markReviewed,
       messages,
       thinking,
       ask,

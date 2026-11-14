@@ -54,6 +54,8 @@ interface BackendEvidence {
   persons?: string[];
   captureNote?: string | null;
   captureDetected?: string[];
+  needsReview?: boolean;
+  missingCapture?: string[];
 }
 
 const STATUS_MAP: Record<string, EvidenceItem["status"]> = {
@@ -81,7 +83,7 @@ function toEvidenceItem(item: BackendEvidence): EvidenceItem {
     size: item.size,
     uploadedAt: item.uploadedAt,
     uploadedBy: item.uploadedBy,
-    status: STATUS_MAP[item.status] ?? "processing",
+    status: item.needsReview ? "review" : STATUS_MAP[item.status] ?? "processing",
     source: item.source,
     hash: item.hash,
     tags: item.tags ?? [],
@@ -95,6 +97,8 @@ function toEvidenceItem(item: BackendEvidence): EvidenceItem {
     persons: item.persons ?? [],
     captureNote: item.captureNote ?? undefined,
     captureDetected: item.captureDetected ?? [],
+    needsReview: item.needsReview ?? false,
+    missingCapture: item.missingCapture ?? [],
   };
 }
 
@@ -324,6 +328,15 @@ export const api = {
       // Backend unreachable: show an empty vault rather than fabricated data.
       return [];
     }
+  },
+  /** Skip the capture-detail review and mark an item as processed. */
+  async markEvidenceReviewed(id: string): Promise<EvidenceItem> {
+    const response = await request(`/api/evidence/${id}/review`, { method: "POST" });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Review update failed (HTTP ${response.status})`);
+    }
+    return toEvidenceItem((await response.json()) as BackendEvidence);
   },
   /** Grounded summary of one evidence item. */
   async evidenceSummary(id: string, refresh = false): Promise<EvidenceAiSummary> {

@@ -43,6 +43,8 @@ export interface EvidenceItem {
   persons?: string[];
   captureNote?: string;
   captureDetected?: string[];
+  needsReview?: boolean;
+  missingCapture?: string[];
 }
 
 export type EventCategory = "Communication" | "Financial" | "Physical" | "Digital" | "Legal";

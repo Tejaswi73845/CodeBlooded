@@ -82,6 +82,7 @@ src/
 - Drag-and-drop or browse to upload. A **capture details** dialog collects date, time, location, people and a note — all optional.
 - **Auto-detect missing details from the file** (default on): the backend fills blanks after processing; detected fields are labelled in the drawer.
 - List/grid views, search, type/status/person filters, sorting, per-file progress driven by real `GET /evidence/{id}/status` polling.
+- Completed items missing capture details (date, location or people) are shown as **Needs review**; use the check action (list, grid or drawer) to **mark reviewed / skip**, or add the details first.
 - Drawer: real extracted text, capture metadata, integrity hash, linked people/events.
   - **Edit details** corrects date/location/people/note (`PATCH /evidence/{id}/capture`).
   - **Download** fetches the preserved original (`GET /evidence/{id}/download`).

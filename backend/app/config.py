@@ -32,7 +32,11 @@ class Settings(BaseSettings):
 
     upload_dir: Path = BACKEND_DIR / "uploads"
     max_upload_mb: int = 2048
-    allowed_extensions: str = "pdf,png,jpg,jpeg,mp3,wav,m4a,aac,flac,ogg,mp4,mov,mkv,webm,txt,json,csv,eml"
+    allowed_extensions: str = (
+        "pdf,png,jpg,jpeg,mp3,wav,m4a,aac,flac,ogg,opus,aiff,aif,wma,amr,"
+        "mp4,m4v,mov,mkv,webm,avi,wmv,flv,mpg,mpeg,3gp,ogv,"
+        "txt,json,csv,eml"
+    )
     read_only_originals: bool = True
 
     cors_origins: str = (

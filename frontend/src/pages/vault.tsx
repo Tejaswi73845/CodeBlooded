@@ -1,5 +1,6 @@
 import {
   ArrowDownUp,
+  CheckCheck,
   ChevronRight,
   CloudUpload,
   FileStack,
@@ -38,7 +39,7 @@ const typeFilters: { value: "all" | EvidenceType; label: string }[] = [
 ];
 
 export function VaultPage() {
-  const { evidence, people, uploadFiles, openEvidence, uploads, toast, deleteEvidence } = useApp();
+  const { evidence, people, uploadFiles, openEvidence, uploads, toast, deleteEvidence, markReviewed } = useApp();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | EvidenceType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | EvidenceStatus>("all");
@@ -127,7 +128,7 @@ export function VaultPage() {
         type="file"
         multiple
         className="hidden"
-        accept="image/*,application/pdf,audio/*,video/*,.txt,.csv,.json"
+        accept="image/*,application/pdf,audio/*,video/*,.txt,.csv,.json,.eml,.m4v,.avi,.wmv,.flv,.mpg,.mpeg,.3gp,.ogv,.opus,.aiff,.aif,.wma,.amr"
         onChange={(e) => {
           handleFiles(e.target.files);
           e.target.value = "";
@@ -413,6 +414,19 @@ export function VaultPage() {
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex items-center justify-end gap-1">
+                          {item.needsReview && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void markReviewed(item.id);
+                              }}
+                              aria-label={`Mark ${item.name} as reviewed`}
+                              title={`Missing: ${item.missingCapture?.join(", ") || "capture details"} — mark as reviewed`}
+                              className="flex h-6 w-6 items-center justify-center rounded-md text-ink-3 opacity-0 transition-all hover:bg-success/10 hover:text-success focus-visible:opacity-100 group-hover:opacity-100"
+                            >
+                              <CheckCheck className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -472,6 +486,16 @@ export function VaultPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
+                  {item.needsReview && (
+                    <button
+                      onClick={() => void markReviewed(item.id)}
+                      aria-label={`Mark ${item.name} as reviewed`}
+                      title={`Missing: ${item.missingCapture?.join(", ") || "capture details"} — mark as reviewed`}
+                      className="absolute right-9 top-2 flex h-6 w-6 items-center justify-center rounded-md bg-surface/90 text-ink-3 opacity-0 shadow-sm transition-all hover:bg-success/10 hover:text-success focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               );
             })}

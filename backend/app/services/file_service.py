@@ -19,12 +19,14 @@ from app.models import Evidence, User
 from app.models.enums import EvidenceStatus, IntegrityStatus, ProcessingStage
 from app.services.audit_service import record_audit
 from app.utils.files import (
+    AMBIGUOUS_MEDIA_EXTS,
     detect_file_type,
     extension_of,
     hamming_distance,
     image_phash,
     original_dir,
     safe_filename,
+    sniff_media,
     validate_stored_path,
     verify_magic,
 )
@@ -95,10 +97,15 @@ async def store_upload(
                 handle.write(chunk)
         if size == 0:
             raise UnsupportedMediaError("Empty files cannot be preserved.", {"filename": original_name})
-        if not verify_magic(tmp_path, extension_of(clean_name)):
+        ext = extension_of(clean_name)
+        sniffed = sniff_media(tmp_path) if ext in AMBIGUOUS_MEDIA_EXTS else None
+        if sniffed:
+            # e.g. "recording.mp3.mpeg" is an MP3; trust magic over the extension.
+            file_type, mime = sniffed
+        elif not verify_magic(tmp_path, ext):
             raise UnsupportedMediaError(
                 "The file signature does not match its extension.",
-                {"filename": original_name, "extension": extension_of(clean_name)},
+                {"filename": original_name, "extension": ext},
             )
 
         sha256 = digest.hexdigest()

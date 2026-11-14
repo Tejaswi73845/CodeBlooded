@@ -205,8 +205,8 @@ Processing is serialised in-process with a lock because OCR/ASR models are CPU- 
 
 * **Images** — Pillow metadata/EXIF, EasyOCR blocks with confidence and bounding boxes.
 * **PDFs** — PyMuPDF per-page text; image-only pages are rendered at 2× and OCR'd; page numbers preserved.
-* **Audio** — FFmpeg → 16 kHz mono WAV → Whisper segments (start/end/confidence).
-* **Video** — representative frames every N seconds → OCR with frame timestamps; audio track → Whisper with timestamps. Frame-derived text and transcripts are stored separately.
+* **Audio** — FFmpeg → 16 kHz mono WAV → Whisper segments (start/end/confidence). Supports mp3, wav, m4a, aac, flac, ogg, opus, aiff/aif, wma and amr.
+* **Video** — representative frames every N seconds → OCR with frame timestamps; audio track → Whisper with timestamps. Supports mp4, m4v, mov, mkv, webm, avi, wmv, flv, mpg/mpeg, 3gp and ogv. Short clips fall back to one frame per second; if frames cannot be decoded the item still processes its audio track.
 * **Text/chat/data** — UTF-8/CP1252 decoding, truncation at 5 MB for analysis (original preserved).
 
 ### Entities and timeline
@@ -243,6 +243,7 @@ Base URL: `http://127.0.0.1:8000/api`
 | GET | `/evidence/{id}` | Metadata, extracted content, entities, events, capture details, duplicates |
 | GET | `/evidence/{id}/status` | Live processing progress |
 | GET | `/evidence/{id}/summary` | Grounded summary of one item (cached by content hash; `?refresh=true` regenerates) |
+| POST | `/evidence/{id}/review` | Mark an item reviewed when capture details are intentionally skipped |
 | GET | `/evidence/{id}/download` | Original file; logs access; exposes `X-Evidence-SHA256` |
 | PATCH | `/evidence/{id}/capture` | Correct date/time/location/people/note; re-syncs entities + timeline |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256, update integrity, audit |

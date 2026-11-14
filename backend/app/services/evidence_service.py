@@ -145,6 +145,18 @@ def serialize_evidence_many(db: Session, rows: list[Evidence]) -> list[EvidenceS
                 occurred_at = datetime.fromisoformat(str(raw_occurred).replace("Z", "+00:00"))
             except ValueError:
                 occurred_at = None
+        missing_capture: list[str] = []
+        if not capture.get("occurredAt"):
+            missing_capture.append("date")
+        if not capture.get("location"):
+            missing_capture.append("location")
+        if not (capture.get("persons") or []):
+            missing_capture.append("people")
+        needs_review = (
+            bool(missing_capture)
+            and not bool(meta.get("captureReviewed"))
+            and evidence.status.value == "completed"
+        )
         output.append(
             EvidenceSummary(
                 id=evidence.id,
@@ -176,6 +188,8 @@ def serialize_evidence_many(db: Session, rows: list[Evidence]) -> list[EvidenceS
                 persons=list(capture.get("persons") or []),
                 capture_note=capture.get("note"),
                 capture_detected=list(capture.get("detected") or []),
+                needs_review=needs_review,
+                missing_capture=missing_capture,
             )
         )
     return output

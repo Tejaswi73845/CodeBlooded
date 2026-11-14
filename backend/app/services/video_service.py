@@ -38,31 +38,52 @@ def extract_video_assets(source: Path, work_dir: Path) -> VideoResult:
     frames_dir.mkdir(parents=True, exist_ok=True)
     interval = max(1, settings.video_frame_interval_seconds)
     max_frames = max(1, settings.max_video_frames)
-    command = [
-        ffmpeg_binary(),
-        "-y",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        str(source),
-        "-vf",
-        f"fps=1/{interval}",
-        "-frames:v",
-        str(max_frames),
-        "-q:v",
-        "3",
-        str(frames_dir / "frame_%03d.jpg"),
-    ]
-    try:
-        subprocess.run(command, capture_output=True, text=True, timeout=900, check=True)
-    except subprocess.CalledProcessError as exc:
-        raise ProcessingError("Representative frames could not be extracted.", {"stderr": exc.stderr[-500:]}) from exc
+    # First try the configured sampling interval; short clips may produce no
+    # frames, so fall back to one frame per second. JPEG encoding also needs
+    # full-range YUV on newer ffmpeg builds (hence pix_fmt/strict flags).
+    frames: list[VideoFrame] = []
+    for filter_expr in (f"fps=1/{interval}", "fps=1"):
+        for stale in frames_dir.glob("frame_*.jpg"):
+            stale.unlink(missing_ok=True)
+        command = [
+            ffmpeg_binary(),
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(source),
+            "-vf",
+            filter_expr,
+            "-frames:v",
+            str(max_frames),
+            "-q:v",
+            "3",
+            "-pix_fmt",
+            "yuvj420p",
+            "-strict",
+            "unofficial",
+            str(frames_dir / "frame_%03d.jpg"),
+        ]
+        try:
+            subprocess.run(command, capture_output=True, text=True, timeout=900, check=True)
+        except subprocess.CalledProcessError as exc:
+            logger.warning(
+                "Frame extraction (%s) failed for %s: %s",
+                filter_expr,
+                source.name,
+                (exc.stderr or "")[-300:],
+            )
+            continue
+        frames = [
+            VideoFrame(index=index, path=path, timestamp=round(index * interval, 2))
+            for index, path in enumerate(sorted(frames_dir.glob("frame_*.jpg")))
+        ]
+        if frames:
+            break
 
-    frames = [
-        VideoFrame(index=index, path=path, timestamp=round(index * interval, 2))
-        for index, path in enumerate(sorted(frames_dir.glob("frame_*.jpg")))
-    ]
+    if not frames:
+        logger.warning("No frames could be extracted from %s; continuing with audio only", source.name)
 
     audio_path = work_dir / "audio_16k.wav"
     try:

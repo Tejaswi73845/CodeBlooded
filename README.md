@@ -215,6 +215,8 @@ Corrections after upload: `PATCH /api/evidence/{id}/capture` with the same `date
 | Audio | FFmpeg → 16 kHz mono WAV → Whisper transcript with segment timestamps |
 | Video | Frames sampled every `VIDEO_FRAME_INTERVAL_SECONDS` (default 8s, max `MAX_VIDEO_FRAMES`) + OCR per frame; audio track transcribed |
 
+Supported media containers: **video** mp4, m4v, mov, mkv, webm, avi, wmv, flv, mpg/mpeg, 3gp, ogv · **audio** mp3, wav, m4a, aac, flac, ogg, opus, aiff/aif, wma, amr.
+
 Tuning knobs: `VIDEO_FRAME_INTERVAL_SECONDS`, `MAX_VIDEO_FRAMES`, `WHISPER_MODEL`, `MAX_PDF_OCR_PAGES`, `OCR_ENGINE`, `OCR_LANGUAGES`. Reprocess after changes with `POST /api/evidence/{id}/reprocess`.
 
 ---
@@ -238,6 +240,7 @@ Base URL: `http://127.0.0.1:8000/api` — full reference in [backend/README.md](
 | GET | `/evidence/{id}` | Detail: extracted content, entities, events, capture, duplicates |
 | GET | `/evidence/{id}/status` | Processing progress/stage |
 | GET | `/evidence/{id}/summary` | AI summary of one item (cached; `?refresh=true` to regenerate) |
+| POST | `/evidence/{id}/review` | Mark reviewed when capture details are intentionally skipped |
 | GET | `/evidence/{id}/download` | Download original (audited) |
 | PATCH | `/evidence/{id}/capture` | Correct capture details; re-sync graph + timeline |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256 |

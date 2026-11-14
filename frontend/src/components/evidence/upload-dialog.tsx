@@ -13,6 +13,8 @@ function typeOf(file: File): EvidenceType {
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("audio/")) return "audio";
   if (file.type === "application/pdf") return "document";
+  if (/\.(mp4|m4v|mov|mkv|webm|avi|wmv|flv|mpg|mpeg|3gp|ogv)$/i.test(file.name)) return "video";
+  if (/\.(mp3|wav|m4a|aac|flac|ogg|opus|aiff|aif|wma|amr)$/i.test(file.name)) return "audio";
   if (/(chat|whatsapp|telegram|export|messages?)/i.test(file.name)) return "chat";
   return "data";
 }
