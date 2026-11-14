@@ -170,6 +170,7 @@ export interface BackendTimelineEvent {
   timeUncertain?: boolean;
   title: string;
   description: string;
+  summary?: string | null;
   category: string;
   severity: string;
   confidence: number;
@@ -232,6 +233,15 @@ export interface EvidenceAiSummary {
   cached: boolean;
   generatedAt: string;
   limitations: string[];
+}
+
+export interface TimelineEventPatch {
+  date?: string | null;
+  time?: string | null;
+  occurredAtRaw?: string | null;
+  title?: string;
+  description?: string;
+  location?: string | null;
 }
 
 export const api = {
@@ -361,6 +371,40 @@ export const api = {
     const response = await request(`/api/timeline?limit=500`);
     if (!response.ok) throw new Error(`Timeline request failed (HTTP ${response.status})`);
     return ((await response.json()) as { items?: BackendTimelineEvent[] }).items ?? [];
+  },
+  /** AI summaries for timeline event cards (cached server-side). */
+  async timelineSummaries(
+    eventIds: string[],
+    refresh = false,
+    context?: string,
+  ): Promise<Array<{ id: string; summary: string; mode: string }>> {
+    const response = await request(`/api/timeline/summaries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_ids: eventIds, refresh, context: context ?? null }),
+    });
+    if (!response.ok) throw new Error(`Timeline summary request failed (HTTP ${response.status})`);
+    return ((await response.json()) as { items?: Array<{ id: string; summary: string; mode: string }> }).items ?? [];
+  },
+  /** Edit a timeline event (date/time/location/title/description). */
+  async updateTimelineEvent(id: string, patch: TimelineEventPatch): Promise<BackendTimelineEvent> {
+    const response = await request(`/api/timeline/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: patch.date ?? null,
+        time: patch.time ?? null,
+        occurred_at_raw: patch.occurredAtRaw ?? null,
+        title: patch.title ?? null,
+        description: patch.description ?? null,
+        location: patch.location ?? null,
+      }),
+    });
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Event update failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as BackendTimelineEvent;
   },
   /** Correct capture details and re-sync entities/timeline. */
   async updateCapture(id: string, meta: UploadMeta): Promise<EvidenceItem> {

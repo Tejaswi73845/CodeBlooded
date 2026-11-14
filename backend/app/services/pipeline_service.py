@@ -32,6 +32,7 @@ from app.services.ocr_service import extract_image_text
 from app.services.pdf_service import extract_pdf
 from app.services.rag_service import index_evidence
 from app.services.timeline_service import build_timeline_for_evidence, clear_timeline
+from app.services.timeline_summary_service import summarize_events
 from app.services.video_service import extract_video_assets
 from app.utils.files import derived_dir, validate_stored_path
 from app.utils.logging import get_logger
@@ -120,6 +121,20 @@ def _process_evidence(evidence_id: str) -> None:
 
         clear_timeline(db, evidence.id)
         timeline = build_timeline_for_evidence(db, evidence, contents, extraction.events)
+
+        if evidence.workspace_id:
+            try:
+                event_ids = list(
+                    db.scalars(
+                        select(TimelineEvent.id)
+                        .where(TimelineEvent.evidence_id == evidence.id)
+                        .limit(40)
+                    ).all()
+                )
+                if event_ids:
+                    summarize_events(db, event_ids, evidence.workspace_id)
+            except Exception:  # noqa: BLE001 - summaries must never fail processing
+                logger.exception("Timeline summary generation failed for %s", evidence.id)
 
         if (evidence.meta or {}).get("captureAutoDetect") and _detect_capture(evidence, extraction):
             db.add(evidence)

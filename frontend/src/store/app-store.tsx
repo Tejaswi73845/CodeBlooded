@@ -27,6 +27,7 @@ import {
   type AuthUser,
   type BackendEntity,
   type BackendTimelineEvent,
+  type TimelineEventPatch,
   type UploadMeta,
   type WorkspaceInfo,
 } from "@/lib/api";
@@ -97,6 +98,8 @@ interface AppContextValue {
   createWorkspace: (name: string) => Promise<boolean>;
   renameWorkspace: (id: string, name: string) => Promise<boolean>;
   deleteWorkspace: (id: string) => Promise<boolean>;
+  updateEvent: (id: string, patch: TimelineEventPatch) => Promise<boolean>;
+  resummarizeEvent: (id: string, context?: string) => Promise<boolean>;
   user: AuthUser | null;
   authReady: boolean;
   signIn: (email: string, password: string) => Promise<boolean>;
@@ -171,8 +174,11 @@ function toEvent(event: BackendTimelineEvent): IncidentEvent | null {
   return {
     id: event.id,
     at: event.at,
+    atRaw: event.atRaw ?? undefined,
+    timeUncertain: event.timeUncertain ?? false,
     title: event.title,
     description: event.description,
+    summary: event.summary ?? undefined,
     category: EVENT_CATEGORIES[event.category] ?? "Physical",
     severity: (event.severity === "critical" || event.severity === "warning" ? event.severity : "info") as Severity,
     personIds: event.personIds ?? [],
@@ -564,6 +570,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               role: "assistant",
               text: reply.text,
               citations: reply.citations,
+              sources: reply.sources,
             },
           ]);
         })
@@ -668,6 +675,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     },
     [activateWorkspace, activeWorkspaceId, toast],
+  );
+
+  const updateEvent = useCallback(
+    async (id: string, patch: TimelineEventPatch) => {
+      try {
+        const updated = await api.updateTimelineEvent(id, patch);
+        const mapped = toEvent(updated);
+        if (mapped) {
+          setEvents((prev) => prev.map((event) => (event.id === id ? mapped : event)));
+        }
+        toast("Event updated", "Timeline details saved.", "success");
+        return true;
+      } catch (error) {
+        toast(
+          "Could not update event",
+          error instanceof Error ? error.message : "Please try again.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [toast],
+  );
+
+  const resummarizeEvent = useCallback(
+    async (id: string, context?: string) => {
+      try {
+        const items = await api.timelineSummaries([id], true, context);
+        const summary = items.find((item) => item.id === id)?.summary;
+        if (!summary) throw new Error("The AI returned no summary.");
+        setEvents((prev) => prev.map((event) => (event.id === id ? { ...event, summary } : event)));
+        toast(
+          "Summary regenerated",
+          context ? "AI re-summarised using your context." : "AI summary refreshed.",
+          "success",
+        );
+        return true;
+      } catch (error) {
+        toast(
+          "Could not regenerate summary",
+          error instanceof Error ? error.message : "Please try again.",
+          "danger",
+        );
+        return false;
+      }
+    },
+    [toast],
   );
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
@@ -793,6 +847,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createWorkspace,
       renameWorkspace,
       deleteWorkspace,
+      updateEvent,
+      resummarizeEvent,
       user,
       authReady,
       signIn,
@@ -834,6 +890,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createWorkspace,
       renameWorkspace,
       deleteWorkspace,
+      updateEvent,
+      resummarizeEvent,
       user,
       authReady,
       signIn,

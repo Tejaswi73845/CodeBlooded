@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.errors import NotFoundError
 from app.models import Entity, EventEntity, Evidence, TimelineEvent
 from app.models.enums import EntityType, EventCategory
-from app.schemas.timeline import TimelineEventOut, TimelinePage, TimelinePerson
+from app.schemas.timeline import TimelineEventOut, TimelineEventUpdate, TimelinePage, TimelinePerson
 from app.utils.text import truncate
 
 
@@ -113,6 +113,63 @@ def get_timeline_event(db: Session, event_id: uuid.UUID, workspace_id: uuid.UUID
     return _serialize_many(db, [event])[0]
 
 
+def update_timeline_event(
+    db: Session,
+    event_id: uuid.UUID,
+    workspace_id: uuid.UUID | None,
+    payload: TimelineEventUpdate,
+) -> TimelineEventOut:
+    event = db.get(TimelineEvent, event_id)
+    if not event:
+        raise NotFoundError("Timeline event", event_id)
+    evidence = db.get(Evidence, event.evidence_id)
+    if not evidence or (workspace_id is not None and evidence.workspace_id != workspace_id):
+        raise NotFoundError("Timeline event", event_id)
+
+    if payload.title is not None:
+        title = payload.title.strip()
+        if title:
+            event.title = title[:300]
+    if payload.description is not None:
+        event.description = payload.description.strip()[:4000]
+
+    if payload.location is not None:
+        meta = dict(event.meta or {})
+        location = payload.location.strip()
+        if location:
+            meta["location"] = location[:300]
+        else:
+            meta.pop("location", None)
+        event.meta = meta
+
+    if payload.date is not None:
+        date = payload.date.strip()
+        if not date:
+            event.occurred_at = None
+            event.occurred_at_raw = payload.occurred_at_raw or None
+            event.time_uncertain = True
+        else:
+            time = (payload.time or "00:00").strip() or "00:00"
+            try:
+                event.occurred_at = datetime.fromisoformat(f"{date}T{time}")
+                event.time_uncertain = not bool(payload.time and payload.time.strip())
+                event.occurred_at_raw = (
+                    payload.occurred_at_raw
+                    or (f"{date} {time}" if payload.time and payload.time.strip() else date)
+                )[:255]
+            except ValueError:
+                raise ValueError("Invalid date/time supplied.")
+
+    # Any manual change invalidates the cached AI summary.
+    meta = dict(event.meta or {})
+    meta.pop("aiSummary", None)
+    event.meta = meta
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return _serialize_many(db, [event])[0]
+
+
 def _serialize_many(db: Session, rows: list[TimelineEvent]) -> list[TimelineEventOut]:
     if not rows:
         return []
@@ -142,6 +199,9 @@ def _serialize_many(db: Session, rows: list[TimelineEvent]) -> list[TimelineEven
                 time_uncertain=event.time_uncertain,
                 title=event.title,
                 description=truncate(event.description, 1600),
+                summary=(event.meta or {}).get("aiSummary", {}).get("summary")
+                if isinstance((event.meta or {}).get("aiSummary"), dict)
+                else None,
                 category=event.category.value,
                 severity=event.severity,
                 confidence=event.confidence,

@@ -3,14 +3,13 @@ import {
   Check,
   Copy,
   FileText,
-  Paperclip,
   Plus,
   ShieldCheck,
   Sparkles,
   Square,
   Wand2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/store/app-store";
 import { suggestedPrompts } from "@/lib/assistant";
 import { PageHeader } from "@/components/page-header";
@@ -18,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FileTypeTile } from "@/components/evidence/file-type";
 import { PersonAvatar } from "@/components/person-avatar";
-import { formatDate } from "@/lib/format";
 
 function Inline({ text }: { text: string }) {
   return (
@@ -71,6 +69,11 @@ export function AssistantPage() {
   const [draft, setDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const latestReply = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages],
+  );
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -282,13 +285,6 @@ export function AssistantPage() {
                 className="max-h-32 min-h-[30px] w-full resize-none bg-transparent px-2 py-1 text-[12.5px] leading-relaxed outline-none placeholder:text-ink-3"
               />
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => toast("Evidence attachment", "Choose files in the Evidence Vault to add context.", "default")}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink"
-                  aria-label="Attach evidence"
-                >
-                  <Paperclip className="h-3.5 w-3.5" />
-                </button>
                 <span className="text-[9.5px] text-ink-3">{evidence.length} sources in context</span>
                 <div className="ml-auto flex items-center gap-1.5">
                   {thinking ? (
@@ -356,25 +352,51 @@ export function AssistantPage() {
             </div>
           )}
 
-          <div className="rounded-card border border-line bg-surface p-4 shadow-card">
-            <h3 className="text-[12px] font-semibold">Context sources</h3>
-            <ul className="mt-2 space-y-1">
-              {evidence.slice(0, 3).map((item) => (
-                <li key={item.id}>
-                  <button
-                    onClick={() => openEvidence(item.id)}
-                    className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-2"
-                  >
-                    <FileTypeTile type={item.type} size="sm" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[10.5px] font-medium">{item.name}</span>
-                      <span className="block text-[9.5px] text-ink-3">{formatDate(item.uploadedAt)}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {latestReply && (
+            <div className="rounded-card border border-line bg-surface p-4 shadow-card">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[12px] font-semibold">Sources used</h3>
+                <Badge tone="neutral">{latestReply.sources?.length ?? 0}</Badge>
+              </div>
+              <p className="mt-0.5 text-[10px] text-ink-3">Pulled from the last answer</p>
+              {latestReply.sources && latestReply.sources.length > 0 ? (
+                <ul className="mt-2 max-h-[330px] space-y-1.5 overflow-y-auto pr-0.5">
+                  {latestReply.sources.map((source, index) => {
+                    const item = evidence.find((entry) => entry.id === source.evidenceId);
+                    return (
+                      <li key={`${source.evidenceId}-${source.locator ?? index}-${index}`}>
+                        <button
+                          onClick={() => item && openEvidence(item.id)}
+                          disabled={!item}
+                          className="w-full rounded-lg border border-line bg-surface-2/50 p-2 text-left transition-colors enabled:hover:border-line-strong enabled:hover:bg-surface-2"
+                        >
+                          <span className="flex items-center gap-2">
+                            <FileTypeTile type={item?.type ?? "document"} size="sm" />
+                            <span className="min-w-0 flex-1 truncate text-[10.5px] font-medium">
+                              {source.name}
+                            </span>
+                            <span className="shrink-0 text-[9.5px] text-ink-3">
+                              {Math.round(source.relevance * 100)}%
+                            </span>
+                          </span>
+                          <span className="mt-1 line-clamp-2 block text-[10px] leading-relaxed text-ink-3">
+                            {source.excerpt}
+                          </span>
+                          {source.locator && (
+                            <span className="mt-0.5 block text-[9.5px] text-ink-3">{source.locator}</span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[10.5px] leading-relaxed text-ink-3">
+                  The last answer didn&rsquo;t use any preserved evidence sources.
+                </p>
+              )}
+            </div>
+          )}
 
           <p className="flex items-start gap-1.5 px-1 text-[10px] leading-relaxed text-ink-3">
             <ShieldCheck className="mt-px h-3 w-3 shrink-0 text-success" />

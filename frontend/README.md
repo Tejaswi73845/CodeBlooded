@@ -4,7 +4,7 @@ React 19 + TypeScript interface for TraceVault. It is fully wired to the FastAPI
 
 Screens: Dashboard · Evidence Vault · Timeline · People & Connections · AI Assistant · Reports · Audit · Settings.
 
-**Workspaces:** the sidebar switcher lists workspaces and lets you create, rename or delete them. Every screen is scoped to the selected workspace (the client sends `X-Workspace-Id`); switching clears and reloads evidence, people, timeline, reports, audit and chat. Deleting a workspace moves its data to the default workspace.
+**Workspaces:** the sidebar switcher lists only **your** workspaces and lets you create, rename or delete them. Every screen is scoped to the selected workspace (the client sends `X-Workspace-Id`); the backend rejects workspaces owned by other accounts. Switching reloads evidence, people, timeline, reports, audit and chat. Deleting a workspace moves its data to your default workspace. Each new account gets its own default workspace at sign-up.
 
 ## Prerequisites
 
@@ -93,7 +93,7 @@ Real counts, a 7-day intake chart computed from upload dates, processing pipelin
 
 ### Timeline
 
-Events from `GET /timeline` (including capture events), grouped by day with category/person/date filters.
+Events from `GET /timeline` (including capture events), grouped by day. Each card shows an **AI summary**, date/day, raw and normalised time, location, linked people and source files, plus an **Edit** action to correct date/time/location and to **re-summarise with investigator context** (e.g. "this was a refund, not extortion"). Summaries are generated on demand via `POST /timeline/summaries` and cached.
 
 ### People & Connections
 
@@ -101,11 +101,11 @@ Nodes from `GET /entities?type=person`; edges connect people who appear in the s
 
 ### AI Assistant
 
-Grounded Q&A via `POST /assistant/chat` with source chips for citations. Answers degrade to labelled extractive mode when the AI provider is unavailable or out of balance; configuration is server-side.
+Grounded Q&A via `POST /assistant/chat` with source chips for citations. A **Sources used** panel shows exactly which evidence passages the last answer pulled from (file, excerpt, locator, relevance) and appears only after a question has been answered. Answers degrade to labelled extractive mode when the AI provider is unavailable or out of balance; configuration is server-side.
 
 ### Reports
 
-List from `GET /reports`; Generate calls `POST /reports/generate`; Export downloads `GET /reports/{id}/pdf`. The preview is composed from live evidence, people and timeline data.
+A single live document preview built from your evidence, people and timeline. A **Disclosure check** at the top lists readiness items (evidence preserved, integrity verified, required sections enabled, people resolved). **Document settings** opens a popup with section switches; changes update the preview live and the preview always uses the full page width. **Download PDF** prints the live preview (choose *Save as PDF*), so only the enabled sections are included.
 
 ### Audit
 

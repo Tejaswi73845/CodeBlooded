@@ -7,19 +7,24 @@ import {
   MapPin,
   MessageSquare,
   MonitorSmartphone,
+  Pencil,
   RotateCcw,
   ShieldAlert,
+  Sparkles,
+  Users,
   Waypoints,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/store/app-store";
-import type { EventCategory } from "@/data/types";
+import { api } from "@/lib/api";
+import type { EventCategory, IncidentEvent } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile } from "@/components/evidence/file-type";
+import { EventEditDialog } from "@/components/timeline/event-edit-dialog";
 import { formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -48,11 +53,15 @@ const longDate = new Intl.DateTimeFormat("en-US", {
 });
 
 export function TimelinePage() {
-  const { events, people, evidence, openEvidence, navigate, toast } = useApp();
+  const { events, people, evidence, openEvidence, navigate, toast, activeWorkspaceId, updateEvent, resummarizeEvent } = useApp();
   const [category, setCategory] = useState<"all" | EventCategory>("all");
   const [person, setPerson] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [summaries, setSummaries] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<IncidentEvent | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const requested = useRef<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     return [...events]
@@ -66,6 +75,42 @@ export function TimelinePage() {
       })
       .sort((a, b) => +new Date(a.at) - +new Date(b.at));
   }, [events, category, person, from, to]);
+
+  useEffect(() => {
+    setSummaries({});
+    requested.current = new Set();
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    const missing = filtered
+      .filter((event) => !event.summary && !summaries[event.id] && !requested.current.has(event.id))
+      .map((event) => event.id)
+      .slice(0, 12);
+    if (missing.length === 0) return;
+    missing.forEach((id) => requested.current.add(id));
+    let cancelled = false;
+    void api
+      .timelineSummaries(missing)
+      .then((items) => {
+        if (cancelled) return;
+        setSummaries((prev) => {
+          const next = { ...prev };
+          items.forEach((item) => {
+            next[item.id] = item.summary;
+          });
+          return next;
+        });
+      })
+      .catch(() => {
+        missing.forEach((id) => requested.current.delete(id));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filtered, summaries, activeWorkspaceId]);
+
+  const summaryFor = (id: string, fallback: string, inline?: string) =>
+    (inline || summaries[id] || fallback);
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof filtered>();
@@ -289,15 +334,6 @@ export function TimelinePage() {
                             >
                               <meta.icon className="h-3 w-3" />
                             </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                event.evidenceIds[0] && openEvidence(event.evidenceIds[0]);
-                              }}
-                              className="text-left text-[13px] font-medium hover:text-accent"
-                            >
-                              {event.title}
-                            </button>
                             <Badge tone="neutral" className="h-[19px] text-[10px]">
                               {event.category}
                             </Badge>
@@ -306,45 +342,108 @@ export function TimelinePage() {
                                 Critical
                               </Badge>
                             )}
-                            <span className="ml-auto hidden items-center gap-0.5 text-[10.5px] text-ink-3 sm:flex">
-                              <MapPin className="h-2.5 w-2.5" />
-                              {event.location ?? "Digital source"}
-                            </span>
+                            {event.severity === "warning" && (
+                              <Badge tone="warning" className="h-[19px] text-[10px]">
+                                Attention
+                              </Badge>
+                            )}
+                            {event.timeUncertain && (
+                              <Badge tone="neutral" className="h-[19px] text-[10px]">
+                                time uncertain
+                              </Badge>
+                            )}
+                            <button
+                              onClick={(clickEvent) => {
+                                clickEvent.stopPropagation();
+                                setEditing(event);
+                              }}
+                              className="ml-auto inline-flex items-center gap-1 rounded-md border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                            >
+                              <Pencil className="h-3 w-3" /> Edit
+                            </button>
                           </div>
 
-                          <p className="mt-1.5 text-[12px] leading-relaxed text-ink-2">{event.description}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              event.evidenceIds[0] && openEvidence(event.evidenceIds[0]);
+                            }}
+                            className="mt-2 block text-left text-[13.5px] font-semibold leading-snug transition-colors hover:text-accent"
+                          >
+                            {event.title}
+                          </button>
 
-                          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-2.5">
-                            <span className="flex items-center gap-1.5">
-                              <span className="flex -space-x-1.5">
-                                {linkedPeople.map((p) => (
-                                  <PersonAvatar key={p.id} person={p} size="xs" ring />
-                                ))}
-                              </span>
-                              <span className="flex items-center gap-1 text-[10.5px] text-ink-2">
-                                {linkedPeople.map((p) => p.name.split(" ")[0]).join(", ")}
-                              </span>
-                            </span>
+                          <div className="mt-2 rounded-lg border border-line bg-surface-2/60 p-2.5">
+                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-accent">
+                              <Sparkles className="h-3 w-3" /> AI summary
+                            </div>
+                            <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                              {summaryFor(event.id, event.description, event.summary)}
+                            </p>
+                            {!event.summary && !summaries[event.id] && (
+                              <p className="mt-1 text-[10px] text-ink-3">Generating summary…</p>
+                            )}
+                          </div>
 
-                            <span className="flex min-w-0 flex-wrap items-center gap-1">
-                              {sources.map((item) => (
-                                <button
-                                  key={item.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEvidence(item.id);
-                                  }}
-                                  className="flex max-w-[220px] items-center gap-1.5 rounded-md border border-line bg-surface-2 py-0.5 pl-0.5 pr-1.5 transition-colors hover:border-line-strong hover:bg-surface-3"
-                                  title={item.name}
-                                >
-                                  <FileTypeTile type={item.type} size="sm" />
-                                  <span className="truncate text-[10px] text-ink-2">{item.name}</span>
-                                </button>
-                              ))}
-                              {sources.length === 0 && (
-                                <span className="text-[10px] text-ink-3">No supporting file</span>
-                              )}
-                            </span>
+                          <dl className="mt-2.5 grid gap-x-5 gap-y-1.5 border-t border-line pt-2.5 text-[11px] sm:grid-cols-2">
+                            <div className="flex min-w-0 items-baseline gap-1.5">
+                              <dt className="shrink-0 text-ink-3">Date</dt>
+                              <dd className="truncate text-ink-2">{longDate.format(new Date(event.at))}</dd>
+                            </div>
+                            <div className="flex min-w-0 items-baseline gap-1.5">
+                              <dt className="shrink-0 text-ink-3">Time</dt>
+                              <dd className="truncate text-ink-2">
+                                {formatTime(event.at)}
+                                {event.atRaw ? ` · ${event.atRaw}` : ""}
+                              </dd>
+                            </div>
+                            <div className="flex min-w-0 items-baseline gap-1.5">
+                              <dt className="flex shrink-0 items-center gap-1 text-ink-3">
+                                <MapPin className="h-3 w-3" /> Location
+                              </dt>
+                              <dd className="truncate text-ink-2">{event.location ?? "Not recorded"}</dd>
+                            </div>
+                            <div className="flex min-w-0 items-baseline gap-1.5">
+                              <dt className="flex shrink-0 items-center gap-1 text-ink-3">
+                                <Users className="h-3 w-3" /> People
+                              </dt>
+                              <dd className="flex min-w-0 flex-wrap gap-1">
+                                {linkedPeople.length > 0 ? (
+                                  linkedPeople.map((p) => (
+                                    <span
+                                      key={p.id}
+                                      className="inline-flex items-center gap-1 rounded-full border border-line bg-surface py-0.5 pl-0.5 pr-2 text-[10px] text-ink-2"
+                                    >
+                                      <PersonAvatar person={p} size="xs" />
+                                      {p.name}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="truncate text-ink-3">None linked</span>
+                                )}
+                              </dd>
+                            </div>
+                          </dl>
+
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1 border-t border-line pt-2.5">
+                            <span className="mr-1 text-[10px] text-ink-3">Sources</span>
+                            {sources.map((item) => (
+                              <button
+                                key={item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEvidence(item.id);
+                                }}
+                                className="flex max-w-[220px] items-center gap-1.5 rounded-md border border-line bg-surface-2 py-0.5 pl-0.5 pr-1.5 transition-colors hover:border-line-strong hover:bg-surface-3"
+                                title={item.name}
+                              >
+                                <FileTypeTile type={item.type} size="sm" />
+                                <span className="truncate text-[10px] text-ink-2">{item.name}</span>
+                              </button>
+                            ))}
+                            {sources.length === 0 && (
+                              <span className="text-[10px] text-ink-3">No supporting file</span>
+                            )}
                           </div>
                         </div>
                       </li>
@@ -355,6 +454,23 @@ export function TimelinePage() {
             </section>
           ))}
         </div>
+      )}
+
+      {editing && (
+        <EventEditDialog
+          event={editing}
+          busy={editBusy}
+          onClose={() => setEditing(null)}
+          onSave={async (patch, context, resummarize) => {
+            setEditBusy(true);
+            const ok = await updateEvent(editing.id, patch);
+            if (ok && resummarize) {
+              await resummarizeEvent(editing.id, context);
+            }
+            setEditBusy(false);
+            if (ok) setEditing(null);
+          }}
+        />
       )}
     </div>
   );

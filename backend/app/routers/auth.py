@@ -19,8 +19,8 @@ def _out(user: User) -> UserOut:
     return UserOut(id=user.id, email=user.email, name=user.display_name, role=user.role)
 
 
-def _default_workspace_id(db: Session):
-    return workspace_service.get_default(db).id
+def _default_workspace_id(db: Session, user: User):
+    return workspace_service.ensure_default_for_user(db, user).id
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -35,6 +35,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         raise AppError(409, "email_taken", "An account with this email already exists.")
 
     user = auth_service.register(db, name=payload.name, email=email, password=payload.password)
+    workspace_id = _default_workspace_id(db, user)
     token = auth_service.create_session(db, user)
     record_audit(
         db,
@@ -45,7 +46,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         details={"email": user.email},
         ip_address=client_ip(request),
         user_agent=user_agent(request),
-        workspace_id=_default_workspace_id(db),
+        workspace_id=workspace_id,
     )
     return AuthResponse(token=token, user=_out(user))
 
@@ -55,6 +56,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     user = auth_service.authenticate(db, email=payload.email, password=payload.password)
     if not user:
         raise AppError(401, "invalid_credentials", "Email or password is incorrect.")
+    workspace_id = _default_workspace_id(db, user)
     token = auth_service.create_session(db, user)
     record_audit(
         db,
@@ -65,7 +67,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         details={"email": user.email},
         ip_address=client_ip(request),
         user_agent=user_agent(request),
-        workspace_id=_default_workspace_id(db),
+        workspace_id=workspace_id,
     )
     return AuthResponse(token=token, user=_out(user))
 
@@ -84,7 +86,7 @@ def logout(request: Request, db: Session = Depends(get_db)):
         target_id=str(user.id) if user else None,
         ip_address=client_ip(request),
         user_agent=user_agent(request),
-        workspace_id=_default_workspace_id(db) if user else None,
+        workspace_id=_default_workspace_id(db, user) if user else None,
     )
     return {"signedOut": True}
 

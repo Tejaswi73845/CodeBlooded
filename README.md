@@ -14,7 +14,7 @@ TraceVault is the platform name; the React interface ships under the **Veritas**
 - **Entities & connections** — people, locations, organisations, phones, emails and dates, with a relationship graph built from evidence co-occurrence. Capture details are synced into entities and the timeline.
 - **Timeline** — reconstructed events with raw timestamps, UTC normalisation, uncertainty flags and source locators (page, frame, audio segment).
 - **Grounded assistant** — retrieval-augmented Q&A over preserved evidence with `[S1]`-style citations; deterministic metadata answers for questions like *"what is the latest evidence?"*.
-- **Workspaces** — keep separate investigations isolated. Create, rename or delete workspaces from the sidebar; evidence, entities, timeline, reports and audit entries are scoped to the selected workspace.
+- **Workspaces** — every account gets its own workspace, and workspaces are user-owned. Evidence, entities, timeline, reports and audit entries are scoped to the signed-in user's workspace; another account never sees them. Create, rename or delete your own workspaces from the sidebar.
 - **Reports** — structured reports with an integrity section, stored server-side and exportable as PDF.
 - **Audit ledger** — append-only, hash-chained log of every upload, view, download, query, edit, report and verification.
 
@@ -244,6 +244,8 @@ Base URL: `http://127.0.0.1:8000/api` — full reference in [backend/README.md](
 | POST | `/evidence/{id}/reprocess` | Re-run extraction |
 | DELETE | `/evidence/{id}` | Soft delete (original retained) |
 | GET | `/timeline` | Reconstructed events with filters |
+| PATCH | `/timeline/{id}` | Edit date/time/location/title/description (audited) |
+| POST | `/timeline/summaries` | AI summaries for event cards (cached; optional correction `context`) |
 | GET | `/entities` · `/entities/graph` | Entities and relationship graph |
 | POST | `/assistant/chat` | Grounded Q&A with citations |
 | POST | `/assistant/reindex` | Backfill chunks/embeddings |
@@ -258,7 +260,7 @@ All responses are camelCase with UTC timestamps (`Z`). Errors share one envelope
 { "error": { "code": "…", "message": "…", "details": {}, "requestId": "…" } }
 ```
 
-**Workspace scoping:** send `X-Workspace-Id: <workspace-uuid>` on every request (the UI does this automatically). Missing or unknown IDs fall back to the default workspace. Evidence, entities, timeline, assistant, reports and audit are all filtered by that workspace.
+**Workspace scoping:** workspaces are owned by the signed-in user. The UI sends `X-Workspace-Id: <uuid>` on every request; the backend accepts it only if that workspace belongs to the current user, otherwise it falls back to the user's default workspace. Evidence, entities, timeline, assistant, reports and audit are filtered by that workspace, so one account never sees another account's data. Anonymous API calls (when `AUTH_REQUIRED=false`) act as the seeded demo account.
 
 **Authentication:** the UI signs in via `/auth/login` and sends `Authorization: Bearer <token>` on every request. Sessions are opaque tokens stored hashed in `auth_sessions` and expire after `AUTH_SESSION_DAYS`. `AUTH_REQUIRED=true` enforces auth on the API; the default (`false`) keeps Swagger usable for local testing. The seeded account is `aarav.shah@kestrel.legal` / `DEFAULT_PASSWORD` (`tracevault`).
 

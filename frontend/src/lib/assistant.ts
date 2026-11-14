@@ -1,8 +1,18 @@
 import { api } from "@/lib/api";
 
+export interface AssistantSource {
+  evidenceId: string;
+  name: string;
+  fileType: string;
+  excerpt: string;
+  locator?: string | null;
+  relevance: number;
+}
+
 export interface AssistantReply {
   text: string;
   citations: string[];
+  sources: AssistantSource[];
 }
 
 export interface ChatMessage {
@@ -10,6 +20,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   citations?: string[];
+  sources?: AssistantSource[];
 }
 
 export function suggestedPrompts() {
@@ -35,5 +46,13 @@ export async function answer(question: string): Promise<AssistantReply> {
   return {
     text,
     citations: [...new Set(result.sources.map((source) => source.evidenceName))],
+    sources: result.sources.map((source) => ({
+      evidenceId: source.evidenceId,
+      name: source.evidenceName,
+      fileType: source.fileType,
+      excerpt: source.excerpt,
+      locator: source.locator,
+      relevance: source.relevance,
+    })),
   };
 }

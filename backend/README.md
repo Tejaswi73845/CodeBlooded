@@ -249,6 +249,8 @@ Base URL: `http://127.0.0.1:8000/api`
 | POST | `/evidence/{id}/reprocess` | Re-run extraction |
 | DELETE | `/evidence/{id}` | Soft delete; original retained; audited |
 | GET | `/timeline` | `from`, `to`, `personId`, `category`, `uncertain`, `q` |
+| PATCH | `/timeline/{id}` | Correct date/time/location/title/description; invalidates the cached summary |
+| POST | `/timeline/summaries` | AI summaries for event cards (cached; optional investigator `context` for re-summarising) |
 | GET | `/timeline/{id}` | Single event with source evidence |
 | GET | `/entities` | `type`, `q`, `evidenceId` |
 | GET | `/entities/graph` | Nodes/edges for the relationship UI |
@@ -263,7 +265,7 @@ Base URL: `http://127.0.0.1:8000/api`
 | GET | `/audit/verify` | Recompute the hash chain |
 | GET | `/health` | DB/storage/processor capability report |
 
-All responses use camelCase and UTC timestamps with `Z` (the frontend's dialect). Send `X-Workspace-Id: <uuid>` to scope evidence, entities, timeline, assistant, reports and audit to a workspace; an absent/unknown id resolves to the default workspace. Errors have one shape:
+All responses use camelCase and UTC timestamps with `Z` (the frontend's dialect). Workspaces are user-owned: send `X-Workspace-Id: <uuid>` and the API accepts it only when the workspace belongs to the authenticated user (otherwise it falls back to that user's default). Events, entities, timeline, assistant, reports and audit are filtered accordingly. Errors have one shape:
 
 ```json
 { "error": { "code": "unsupported_media_type", "message": "…", "details": {}, "requestId": "…" } }

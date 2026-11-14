@@ -57,11 +57,11 @@ def init_db() -> None:
 
 
 def ensure_workspace_schema() -> None:
-    """Add workspace columns to pre-existing tables, create the default workspace and backfill."""
+    """Attach workspaces to users, add columns to old tables and backfill existing rows."""
     import app.models  # noqa: F401
     from app.models import AuditLog, Evidence, Report
     from app.models.workspace import Workspace
-    from app.services.workspace_service import DEFAULT_WORKSPACE_NAME
+    from app.services.file_service import get_or_create_default_user
 
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -77,20 +77,41 @@ def ensure_workspace_schema() -> None:
             columns = {column["name"] for column in inspect(engine).get_columns(table)}
             if "workspace_id" not in columns:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN workspace_id {column_type}"))
+        if "workspaces" in tables:
+            columns = {column["name"] for column in inspect(engine).get_columns("workspaces")}
+            if "owner_id" not in columns:
+                conn.execute(text(f"ALTER TABLE workspaces ADD COLUMN owner_id {column_type}"))
+            # Workspace names are unique per user, not globally.
+            if engine.dialect.name == "sqlite":
+                conn.execute(text("DROP INDEX IF EXISTS uq_workspaces_name"))
+            else:
+                conn.execute(text("ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS uq_workspaces_name"))
 
     db = SessionLocal()
     try:
-        default = db.scalar(select(Workspace).where(Workspace.is_default.is_(True)))
+        owner = get_or_create_default_user(db)
+        db.execute(update(Workspace).where(Workspace.owner_id.is_(None)).values(owner_id=owner.id))
+        db.commit()
+
+        default = db.scalar(
+            select(Workspace).where(
+                Workspace.owner_id == owner.id,
+                Workspace.is_default.is_(True),
+            )
+        )
         if default is None:
-            default = db.scalar(select(Workspace).order_by(Workspace.created_at.asc()).limit(1))
+            default = db.scalar(
+                select(Workspace).where(Workspace.owner_id == owner.id).order_by(Workspace.created_at.asc()).limit(1)
+            )
             if default is None:
-                default = Workspace(name=DEFAULT_WORKSPACE_NAME, is_default=True)
+                default = Workspace(name="Default workspace", is_default=True, owner_id=owner.id)
                 db.add(default)
             else:
                 default.is_default = True
                 db.add(default)
             db.commit()
             db.refresh(default)
+
         for model in (Evidence, Report, AuditLog):
             db.execute(
                 update(model).where(model.workspace_id.is_(None)).values(workspace_id=default.id)

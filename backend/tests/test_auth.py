@@ -61,3 +61,47 @@ def test_invalid_credentials_are_rejected(client):
         json={"email": settings.default_actor_email, "password": "wrong-password"},
     )
     assert response.status_code == 401
+
+
+def test_users_cannot_see_each_others_data(client):
+    alice = client.post(
+        "/api/auth/register",
+        json={"name": "Alice", "email": "alice@example.com", "password": "secret123"},
+    ).json()
+    alice_headers = {"Authorization": f"Bearer {alice['token']}"}
+    alice_workspace = client.get("/api/workspaces", headers=alice_headers).json()["items"][0]
+
+    uploaded = client.post(
+        "/api/evidence/upload",
+        files={"files": ("alice.txt", b"Alice private evidence", "text/plain")},
+        headers=alice_headers,
+    )
+    evidence_id = uploaded.json()["items"][0]["id"]
+
+    bob = client.post(
+        "/api/auth/register",
+        json={"name": "Bob", "email": "bob@example.com", "password": "secret123"},
+    ).json()
+    bob_headers = {"Authorization": f"Bearer {bob['token']}"}
+    bob_workspace = client.get("/api/workspaces", headers=bob_headers).json()["items"][0]
+
+    assert alice_workspace["id"] != bob_workspace["id"]
+    assert client.get("/api/evidence", headers=bob_headers).json()["items"] == []
+    assert client.get(f"/api/evidence/{evidence_id}", headers=bob_headers).status_code == 404
+    assert (
+        client.patch(
+            f"/api/workspaces/{alice_workspace['id']}",
+            headers=bob_headers,
+            json={"name": "hijacked"},
+        ).status_code
+        == 404
+    )
+
+    spoofed = client.get(
+        "/api/evidence",
+        headers={**bob_headers, "X-Workspace-Id": alice_workspace["id"]},
+    )
+    assert spoofed.json()["items"] == []
+
+    alice_items = client.get("/api/evidence", headers=alice_headers).json()["items"]
+    assert [item["name"] for item in alice_items] == ["alice.txt"]

@@ -75,8 +75,8 @@ async def lifespan(app: FastAPI):
     (settings.upload_root / "tmp").mkdir(exist_ok=True)
     if settings.auto_create_tables:
         init_db()
-    ensure_workspace_schema()
     ensure_auth_schema()
+    ensure_workspace_schema()
     _recover_interrupted_jobs()
     _ensure_default_credentials()
     logger.info("TraceVault %s starting (%s)", settings.app_version, settings.environment)

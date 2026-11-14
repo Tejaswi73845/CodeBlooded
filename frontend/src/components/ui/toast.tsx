@@ -7,7 +7,7 @@ export function ToastViewport() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden">
       {toasts.map((t) => {
         const Icon = t.tone === "success" ? CircleCheck : t.tone === "danger" ? AlertTriangle : Info;
         return (

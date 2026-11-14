@@ -1,24 +1,19 @@
 import {
   Check,
-  ChevronRight,
+  CircleAlert,
   Download,
   FileCheck2,
-  FilePlus2,
   Fingerprint,
-  Loader2,
-  Printer,
   ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "@/store/app-store";
-import { api, type BackendReport } from "@/lib/api";
-import type { ReportRecord } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/segmented";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Field, Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatBytes, formatDate, formatDateTime, formatTime, truncateHash } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -33,29 +28,8 @@ const sectionLabels: { key: SectionKey; label: string }[] = [
   { key: "integrity", label: "Evidence integrity" },
 ];
 
-const statusTone = {
-  Final: "success",
-  Draft: "neutral",
-  Review: "warning",
-} as const;
-
-function toReportRecord(report: BackendReport): ReportRecord {
-  const status: ReportRecord["status"] =
-    report.status === "Final" || report.status === "Review" ? report.status : "Draft";
-  return {
-    id: report.id,
-    title: report.title,
-    type: report.type,
-    status,
-    createdAt: report.createdAt,
-    pages: report.pages,
-    author: report.author,
-    evidenceCount: report.evidenceCount,
-  };
-}
-
 export function ReportsPage() {
-  const { evidence, events, insights, toast, openEvidence, people, workspace, activeWorkspaceId } = useApp();
+  const { evidence, events, insights, openEvidence, people, workspace } = useApp();
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     summary: true,
     findings: true,
@@ -64,30 +38,7 @@ export function ReportsPage() {
     evidence: true,
     integrity: true,
   });
-  const [reports, setReports] = useState<ReportRecord[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [title, setTitle] = useState("Incident summary");
-  const [template, setTemplate] = useState("incident");
-  const [activeReport, setActiveReport] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .reports()
-      .then((items) => {
-        if (cancelled) return;
-        const mapped = items.map(toReportRecord);
-        setReports(mapped);
-        setActiveReport((current) => current ?? mapped[0]?.id ?? null);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [activeWorkspaceId]);
-
-  const active = reports.find((report) => report.id === activeReport) ?? reports[0] ?? null;
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const chronology = useMemo(() => [...events].sort((a, b) => +new Date(a.at) - +new Date(b.at)), [events]);
   const involved = useMemo(
@@ -101,11 +52,11 @@ export function ReportsPage() {
     const verified = evidence.filter((e) => e.integrity === "verified").length;
     const failed = evidence.filter((e) => e.integrity === "mismatch").length;
     return {
-      title: active?.title ?? "Incident summary",
+      title: "Incident disclosure report",
       caseId: workspace.caseId,
       preparedFor: workspace.name,
       preparedBy: workspace.analyst,
-      generatedAt: active?.createdAt ?? new Date().toISOString(),
+      generatedAt: new Date().toISOString(),
       summary: [
         `${total} evidence item(s) preserved, covering ${people.length} identified people and ${events.length} timeline events.`,
         `${verified} of ${total} item(s) verified against their SHA-256 custody digest.`,
@@ -115,42 +66,52 @@ export function ReportsPage() {
       ],
       integrity: { verified, total, failed, algorithm: "SHA-256", ledger: "chained custody ledger" },
     };
-  }, [active, evidence, events.length, inconsistencies.length, people.length]);
+  }, [evidence, events.length, inconsistencies.length, people.length, workspace]);
 
-  const generate = async () => {
-    setGenerating(true);
-    try {
-      const record = await api.generateReport({
-        title: title.trim() || undefined,
-        reportType: template === "chronology" ? "chronology" : template === "custom" ? "custom" : "incident",
-      });
-      const mapped = toReportRecord(record);
-      setReports((prev) => [mapped, ...prev]);
-      setActiveReport(mapped.id);
-      setDialogOpen(false);
-      toast("Report generated", `${mapped.title} saved.`, "success");
-    } catch (error) {
-      toast(
-        "Report failed",
-        error instanceof Error ? error.message : "The report could not be generated.",
-        "danger",
-      );
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const disclosureChecks = useMemo(
+    () => [
+      {
+        label: "Evidence preserved",
+        detail: `${evidence.length} item(s)`,
+        ok: evidence.length > 0,
+      },
+      {
+        label: "Integrity verified",
+        detail: `${preview.integrity.verified}/${preview.integrity.total} verified`,
+        ok:
+          preview.integrity.total > 0 &&
+          preview.integrity.failed === 0 &&
+          preview.integrity.verified === preview.integrity.total,
+      },
+      {
+        label: "Supporting evidence section",
+        detail: sections.evidence ? "Included" : "Enable it in document settings",
+        ok: sections.evidence,
+      },
+      {
+        label: "Integrity section",
+        detail: sections.integrity ? "Included" : "Enable it in document settings",
+        ok: sections.integrity,
+      },
+      {
+        label: "Chronology section",
+        detail: sections.chronology ? "Included" : "Enable it in document settings",
+        ok: sections.chronology,
+      },
+      {
+        label: "People resolved",
+        detail: `${people.length} resolved`,
+        ok: people.length > 0,
+      },
+    ],
+    [evidence.length, people.length, preview.integrity, sections],
+  );
+  const passedChecks = disclosureChecks.filter((check) => check.ok).length;
+  const disclosureReady = passedChecks === disclosureChecks.length;
 
-  const exportPdf = async () => {
-    if (!active) {
-      toast("No report", "Generate a report first.", "danger");
-      return;
-    }
-    try {
-      await api.reportPdf(active.id, `${active.title}.pdf`);
-      toast("Report exported", `${active.title} · PDF downloaded.`, "success");
-    } catch {
-      window.print();
-    }
+  // Print-to-PDF so the download follows the selected document sections.
+  const downloadPdf = () => {
+    window.print();
   };
 
   return (
@@ -160,8 +121,8 @@ export function ReportsPage() {
           eyebrow={
             <>
               <Badge tone="neutral">{workspace.caseId}</Badge>
-              <Badge tone="success" dot>
-                Ready for disclosure
+              <Badge tone={disclosureReady ? "success" : "warning"} dot>
+                {disclosureReady ? "Ready for disclosure" : "Needs review"}
               </Badge>
             </>
           }
@@ -169,18 +130,46 @@ export function ReportsPage() {
           description="Assemble a court-ready narrative from preserved evidence. Every claim keeps its source and its hash."
           actions={
             <>
-              <Button variant="secondary" onClick={() => window.print()}>
-                <Printer className="h-3.5 w-3.5" /> Print
+              <Button variant="secondary" onClick={() => setSettingsOpen(true)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Document settings
               </Button>
-              <Button variant="primary" onClick={exportPdf}>
-                <Download className="h-3.5 w-3.5" /> Export PDF
+              <Button variant="primary" onClick={downloadPdf}>
+                <Download className="h-3.5 w-3.5" /> Download PDF
               </Button>
             </>
           }
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="print-hidden mb-3 rounded-card border border-line bg-surface p-3 shadow-card">
+        <div className="flex flex-wrap items-center gap-2">
+          <ShieldCheck
+            className={cn("h-3.5 w-3.5", disclosureReady ? "text-success" : "text-warning")}
+          />
+          <h2 className="text-[12.5px] font-semibold">Disclosure check</h2>
+          <Badge tone={disclosureReady ? "success" : "warning"} dot>
+            {disclosureReady ? "Ready for disclosure" : "Needs review"}
+          </Badge>
+          <span className="ml-auto text-[10.5px] text-ink-3">
+            {passedChecks}/{disclosureChecks.length} checks passed
+          </span>
+        </div>
+        <ul className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+          {disclosureChecks.map((check) => (
+            <li key={check.label} className="flex items-start gap-1.5 text-[11px]">
+              {check.ok ? (
+                <Check className="mt-px h-3 w-3 shrink-0 text-success" />
+              ) : (
+                <CircleAlert className="mt-px h-3 w-3 shrink-0 text-warning" />
+              )}
+              <span className="text-ink-2">{check.label}</span>
+              <span className="truncate text-ink-3">· {check.detail}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
         <article
           id="report-preview"
           className="print-area overflow-hidden rounded-card border border-line bg-surface shadow-card print:border-0 print:shadow-none"
@@ -189,7 +178,7 @@ export function ReportsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <FileCheck2 className="h-3.5 w-3.5 text-ink-3" />
               <span className="text-[11.5px] font-medium">Live preview</span>
-              <span className="text-[10.5px] text-ink-3">· {reports.find((r) => r.id === activeReport)?.title ?? "Untitled"}</span>
+              <span className="text-[10.5px] text-ink-3">· {preview.title}</span>
               <Badge tone="success" className="ml-auto">
                 Final
               </Badge>
@@ -458,145 +447,40 @@ export function ReportsPage() {
 
             <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[9px] text-ink-3">
               <span>Confidential · Prepared for legal proceedings · {preview.caseId}</span>
-              <span className="font-mono">SEALED 13 NOV 2026 · 17:04 IST</span>
+              <span className="font-mono">Generated {formatDateTime(preview.generatedAt)}</span>
             </footer>
           </div>
         </article>
-
-        <aside className="print-hidden space-y-3">
-          <div className="rounded-card border border-line bg-surface p-4 shadow-card">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[12.5px] font-semibold">Document settings</h3>
-              <Badge tone="neutral">{Object.values(sections).filter(Boolean).length}/6</Badge>
-            </div>
-            <p className="mt-0.5 text-[10.5px] text-ink-3">Toggle sections in the live preview.</p>
-            <div className="mt-3 space-y-2.5">
-              {sectionLabels.map((section) => (
-                <div key={section.key} className="flex items-center justify-between gap-2">
-                  <span className="text-[11.5px] text-ink-2">{section.label}</span>
-                  <Switch
-                    checked={sections[section.key]}
-                    onChange={(next) => setSections((prev) => ({ ...prev, [section.key]: next }))}
-                    label={section.label}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 flex gap-2 border-t border-line pt-3">
-              <Button variant="primary" className="flex-1" onClick={exportPdf}>
-                <Download className="h-3.5 w-3.5" /> Export PDF
-              </Button>
-              <Button variant="secondary" onClick={() => setDialogOpen(true)}>
-                <FilePlus2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-card border border-line bg-surface shadow-card">
-            <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-              <h3 className="text-[12.5px] font-semibold">Recent reports</h3>
-              <span className="text-[10px] text-ink-3">{reports.length}</span>
-            </div>
-            <ul className="divide-y divide-line">
-              {reports.slice(0, 4).map((report) => (
-                <li key={report.id}>
-                  <button
-                    onClick={() => {
-                      setActiveReport(report.id);
-                      toast("Report opened", report.title);
-                    }}
-                    className={cn(
-                      "flex w-full flex-col gap-1 px-4 py-2.5 text-left transition-colors hover:bg-surface-2",
-                      activeReport === report.id && "bg-surface-2",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium">{report.title}</span>
-                      <Badge tone={statusTone[report.status]} className="h-[18px] text-[9.5px]">
-                        {report.status}
-                      </Badge>
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-ink-3">
-                      {formatDate(report.createdAt)} · {report.pages} pages · {report.author.split(" ")[0]}
-                      <ChevronRight className="ml-auto h-3 w-3" />
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => setDialogOpen(true)}
-              className="flex w-full items-center justify-center gap-1.5 border-t border-line py-2.5 text-[11.5px] font-medium text-accent hover:bg-accent-soft/40"
-            >
-              <FilePlus2 className="h-3.5 w-3.5" /> New report
-            </button>
-          </div>
-
-          <div className="rounded-card border border-line bg-surface p-4 shadow-card">
-            <p className="flex items-center gap-1.5 text-[11px] font-medium">
-              <ShieldCheck className="h-3.5 w-3.5 text-success" /> Disclosure check
-            </p>
-            <ul className="mt-2 space-y-1.5 text-[10.5px] text-ink-2">
-              {[
-                "All references point to preserved copies",
-                "Hash register attached",
-                "Excluded item disclosed with reason",
-                "Reviewer sign-off pending",
-              ].map((line, i) => (
-                <li key={line} className="flex items-start gap-1.5">
-                  {i < 3 ? (
-                    <Check className="mt-px h-3 w-3 shrink-0 text-success" />
-                  ) : (
-                    <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
-                  )}
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => !generating && setDialogOpen(open)}>
-        <DialogContent className="p-5">
-          <DialogTitle className="text-[16px] font-semibold">Generate a report</DialogTitle>
-          <p className="mt-1 text-[12px] text-ink-2">
-            The draft is built from preserved evidence only. Excluded items are listed with their reason.
-          </p>
-          <div className="mt-4 space-y-3">
-            <Field label="Report title">
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </Field>
-            <Field label="Template" hint="Templates control narrative tone and section order.">
-              <select
-                value={template}
-                onChange={(e) => setTemplate(e.target.value)}
-                className="h-9 w-full rounded-[10px] border border-line bg-surface px-2.5 text-[13px] outline-none"
-              >
-                <option value="incident">Incident summary</option>
-                <option value="chronology">Chronological event log</option>
-                <option value="integrity">Evidence integrity certificate</option>
-                <option value="custom">Custom disclosure bundle</option>
-              </select>
-            </Field>
-            <Field label="Scope">
-              <div className="flex items-center justify-between rounded-[10px] border border-line px-3 py-2 text-[12px]">
-                <span>
-                  Matter {workspace.caseId} · {evidence.length} items
-                </span>
-                <Badge tone="success" dot>
-                  Eligible
-                </Badge>
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-md p-5">
+          <DialogTitle className="text-[15px] font-semibold">Document settings</DialogTitle>
+          <DialogDescription className="mt-1 text-[12px] leading-relaxed text-ink-2">
+            Choose which sections appear in the live preview and in the downloaded PDF.
+          </DialogDescription>
+
+          <div className="mt-4 space-y-2.5">
+            {sectionLabels.map((section) => (
+              <div key={section.key} className="flex items-center justify-between gap-2">
+                <span className="text-[12px] text-ink-2">{section.label}</span>
+                <Switch
+                  checked={sections[section.key]}
+                  onChange={(next) => setSections((prev) => ({ ...prev, [section.key]: next }))}
+                  label={section.label}
+                />
               </div>
-            </Field>
+            ))}
           </div>
-          <div className="mt-4 flex items-center gap-2">
-            <Button variant="primary" className="flex-1" onClick={generate} disabled={generating}>
-              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCheck2 className="h-3.5 w-3.5" />}
-              {generating ? "Assembling evidence…" : "Generate report"}
-            </Button>
-            <Button variant="secondary" onClick={() => setDialogOpen(false)} disabled={generating}>
-              Cancel
+
+          <p className="mt-3 rounded-lg bg-surface-2 p-2.5 text-[10.5px] leading-relaxed text-ink-3">
+            {Object.values(sections).filter(Boolean).length} of {sectionLabels.length} sections enabled. The
+            downloaded PDF includes only the enabled sections.
+          </p>
+
+          <div className="mt-4 flex justify-end">
+            <Button variant="primary" size="sm" onClick={() => setSettingsOpen(false)}>
+              Done
             </Button>
           </div>
         </DialogContent>

@@ -7,12 +7,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import current_user
 from app.errors import AppError, NotFoundError
-from app.models import AuditLog, Evidence, Report, Workspace
+from app.models import AuditLog, Evidence, Report, User, Workspace
 from app.schemas.workspace import WorkspaceCreate, WorkspaceList, WorkspaceOut, WorkspaceUpdate
 from app.services import workspace_service
 from app.services.audit_service import record_audit
-from app.utils.http import actor_name, client_ip, user_agent
+from app.utils.http import client_ip, user_agent
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
 
@@ -39,28 +40,37 @@ def _evidence_count(db: Session, workspace_id: uuid.UUID) -> int:
     )
 
 
+def _owned(db: Session, workspace_id: uuid.UUID, user: User) -> Workspace:
+    workspace = db.get(Workspace, workspace_id)
+    if not workspace or workspace.owner_id != user.id:
+        raise NotFoundError("Workspace", workspace_id)
+    return workspace
+
+
 @router.get("", response_model=WorkspaceList)
-def list_workspaces(db: Session = Depends(get_db)):
-    rows = workspace_service.list_with_counts(db)
+def list_workspaces(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    workspace_service.ensure_default_for_user(db, user)
+    rows = workspace_service.list_with_counts(db, user.id)
     return WorkspaceList(items=[_out(workspace, count) for workspace, count in rows], total=len(rows))
 
 
 @router.post("", response_model=WorkspaceOut, status_code=status.HTTP_201_CREATED)
-def create_workspace(payload: WorkspaceCreate, request: Request, db: Session = Depends(get_db)):
+def create_workspace(
+    payload: WorkspaceCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     name = payload.name.strip()
     if not name:
         raise AppError(400, "invalid_workspace_name", "Workspace name cannot be blank.")
-    exists = db.scalar(select(Workspace).where(func.lower(Workspace.name) == name.lower()))
-    if exists:
+    if db.scalar(select(Workspace).where(func.lower(Workspace.name) == name.lower())):
         raise AppError(409, "workspace_exists", f'A workspace named "{name}" already exists.')
 
-    workspace = Workspace(name=name)
-    db.add(workspace)
-    db.commit()
-    db.refresh(workspace)
+    workspace = workspace_service.create_for_user(db, user, name=name)
     record_audit(
         db,
-        actor=actor_name(request),
+        actor=user.display_name,
         action="Workspace created",
         target_type="workspace",
         target_id=str(workspace.id),
@@ -78,10 +88,9 @@ def rename_workspace(
     payload: WorkspaceUpdate,
     request: Request,
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
-    workspace = db.get(Workspace, workspace_id)
-    if not workspace:
-        raise NotFoundError("Workspace", workspace_id)
+    workspace = _owned(db, workspace_id, user)
     name = payload.name.strip()
     if not name:
         raise AppError(400, "invalid_workspace_name", "Workspace name cannot be blank.")
@@ -101,7 +110,7 @@ def rename_workspace(
     db.refresh(workspace)
     record_audit(
         db,
-        actor=actor_name(request),
+        actor=user.display_name,
         action="Workspace renamed",
         target_type="workspace",
         target_id=str(workspace.id),
@@ -114,16 +123,19 @@ def rename_workspace(
 
 
 @router.delete("/{workspace_id}")
-def delete_workspace(workspace_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    workspace = db.get(Workspace, workspace_id)
-    if not workspace:
-        raise NotFoundError("Workspace", workspace_id)
+def delete_workspace(
+    workspace_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    workspace = _owned(db, workspace_id, user)
     if workspace.is_default:
         raise AppError(400, "default_workspace", "The default workspace cannot be deleted.")
 
-    fallback = workspace_service.get_default(db)
+    fallback = workspace_service.get_default(db, user)
     if fallback.id == workspace.id:
-        fallback = workspace_service.get_default(db)
+        raise AppError(400, "default_workspace", "The default workspace cannot be deleted.")
 
     moved = db.execute(
         update(Evidence).where(Evidence.workspace_id == workspace.id).values(workspace_id=fallback.id)
@@ -137,7 +149,7 @@ def delete_workspace(workspace_id: uuid.UUID, request: Request, db: Session = De
     db.commit()
     record_audit(
         db,
-        actor=actor_name(request),
+        actor=user.display_name,
         action="Workspace deleted",
         target_type="workspace",
         target_id=str(workspace_id),

@@ -50,8 +50,11 @@ export type EventCategory = "Communication" | "Financial" | "Physical" | "Digita
 export interface IncidentEvent {
   id: string;
   at: string;
+  atRaw?: string;
+  timeUncertain?: boolean;
   title: string;
   description: string;
+  summary?: string;
   category: EventCategory;
   severity: Severity;
   personIds: string[];

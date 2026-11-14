@@ -21,6 +21,7 @@ class TimelineEventOut(APIModel):
     time_uncertain: bool = True
     title: str
     description: str
+    summary: str | None = None
     category: str
     severity: str
     confidence: float
@@ -46,3 +47,28 @@ class TimelinePage(APIModel):
     earliest: datetime | None = None
     latest: datetime | None = None
     uncertain_count: int = 0
+
+
+class TimelineSummaryRequest(APIModel):
+    event_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    refresh: bool = False
+    context: str | None = Field(default=None, max_length=2000)
+
+
+class TimelineEventUpdate(APIModel):
+    date: str | None = Field(default=None, max_length=32)
+    time: str | None = Field(default=None, max_length=32)
+    occurred_at_raw: str | None = Field(default=None, max_length=255)
+    title: str | None = Field(default=None, max_length=300)
+    description: str | None = Field(default=None, max_length=4000)
+    location: str | None = Field(default=None, max_length=300)
+
+
+class TimelineSummaryItem(APIModel):
+    id: uuid.UUID
+    summary: str
+    mode: str = "ai"
+
+
+class TimelineSummaryResponse(APIModel):
+    items: list[TimelineSummaryItem]

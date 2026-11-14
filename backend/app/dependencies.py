@@ -27,5 +27,8 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 
 def current_workspace(request: Request, db: Session = Depends(get_db)) -> Workspace:
-    """Resolve the workspace selected by the client (defaults safely)."""
-    return workspace_service.resolve(db, request.headers.get(WORKSPACE_HEADER))
+    """Resolve the workspace for the signed-in user (anonymous callers use the demo account)."""
+    user = optional_user(request, db)
+    if user is None:
+        user = auth_service.ensure_default_credentials(db)
+    return workspace_service.resolve(db, request.headers.get(WORKSPACE_HEADER), user)
