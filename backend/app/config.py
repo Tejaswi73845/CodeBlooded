@@ -54,13 +54,15 @@ class Settings(BaseSettings):
     gemini_embedding_dimensions: int = 768
     gemini_embedding_batch_size: int = 50
 
-    # Alternative chat provider: OpenCode Go (Gemini-compatible inference gateway).
-    # Set AI_PROVIDER=opencode + OPENCODE_API_KEY to route generation through Go.
-    # Go serves no embedding models, so embeddings always use GEMINI_API_KEY
-    # (and are skipped automatically when it is empty).
+    # Alternative chat provider: OpenCode inference gateway.
+    # Set AI_PROVIDER=opencode + OPENCODE_API_KEY to route chat through OpenCode.
+    # The base is the provider root; the API shape is picked from the model:
+    # Gemini models use /google/v1beta, everything else uses /openai/v1.
+    # Embeddings are not served by the gateway, so they always use GEMINI_API_KEY.
     ai_provider: str = "google"  # "google" | "opencode"
     opencode_api_key: str | None = None
-    opencode_chat_base: str = "https://opencode.ai/inference/go/google/v1beta"
+    opencode_model: str = "deepseek-v4.1-flash"
+    opencode_chat_base: str = "https://opencode.ai/inference/go"
 
     # Retrieval-augmented generation
     rag_enabled: bool = True

@@ -18,7 +18,7 @@ import {
   pipeline,
 } from "@/data/mock";
 import type { EvidenceItem, EvidenceStatus, EvidenceType, Insight } from "@/data/types";
-import { api } from "@/lib/api";
+import { api, type UploadMeta } from "@/lib/api";
 import { answer, type ChatMessage } from "@/lib/assistant";
 import { formatBytes } from "@/lib/format";
 
@@ -63,7 +63,7 @@ interface AppContextValue {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   uploads: Record<string, number>;
-  uploadFiles: (files: File[]) => void;
+  uploadFiles: (files: File[], meta?: UploadMeta) => void;
   deleteEvidence: (id: string) => Promise<void>;
   messages: ChatMessage[];
   thinking: boolean;
@@ -174,13 +174,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const closeEvidence = useCallback(() => setOpenEvidenceId(null), []);
 
   const uploadFiles = useCallback(
-    (files: File[]) => {
+    (files: File[], meta?: UploadMeta) => {
       const accepted = files.slice(0, 12);
       accepted.forEach((file) => {
         void (async () => {
           let upload: { id: string; hash: string };
           try {
-            upload = await api.upload(file);
+            upload = await api.upload(file, meta);
           } catch (error) {
             toast(
               "Upload failed",
@@ -191,6 +191,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           const { id, hash } = upload;
           const url = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+          const tags = Array.from(
+            new Set([
+              "new intake",
+              ...(meta?.location ? [meta.location] : []),
+              ...(meta?.persons ?? []),
+            ]),
+          ).slice(0, 6);
           const item: EvidenceItem = {
             id,
             name: file.name,
@@ -202,13 +209,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
             status: "queued",
             source: "Local upload",
             hash,
-            tags: ["new intake"],
+            tags,
             personIds: [],
             eventIds: [],
-            note: "Added in this session. Awaiting entity extraction and relationship mapping.",
+            note:
+              meta?.note ||
+              "Added in this session. Awaiting entity extraction and relationship mapping.",
             preview: `${file.type || "binary"} · ${formatBytes(file.size)}`,
             url,
             integrity: "pending",
+            occurredAt: meta?.date ? `${meta.date}T${meta.time || "00:00"}` : undefined,
+            location: meta?.location,
+            persons: meta?.persons ?? [],
+            captureNote: meta?.note,
           };
           setEvidence((prev) => [item, ...prev]);
           setUploads((prev) => ({ ...prev, [id]: 2 }));
@@ -245,6 +258,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 window.clearInterval(tick);
                 setUploads((prev) => ({ ...prev, [id]: 100 }));
                 if (status.status === "completed") {
+                  try {
+                    const fresh = await api.evidence(id);
+                    setEvidence((prev) => prev.map((e) => (e.id === id ? { ...fresh, url: e.url } : e)));
+                  } catch {
+                    // Keep the optimistic item if the refresh fails.
+                  }
                   setNotifications((prev) => [
                     {
                       id: `n-${id}`,

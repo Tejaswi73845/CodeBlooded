@@ -130,6 +130,31 @@ export function EvidenceDrawer() {
               <Meta label="Preserved" value={`${formatDate(item.uploadedAt)}, ${formatTime(item.uploadedAt)}`} />
               <Meta label="Custodian" value={item.uploadedBy} />
               <Meta label="Source" value={item.source} className="col-span-2" />
+              {item.occurredAt && (
+                <Meta
+                  label={
+                    item.captureDetected?.includes("occurredAt") ? "Captured (auto-detected)" : "Captured"
+                  }
+                  value={`${formatDate(item.occurredAt)}, ${formatTime(item.occurredAt)}`}
+                  className="col-span-2"
+                />
+              )}
+              {item.location && (
+                <Meta
+                  label={item.captureDetected?.includes("location") ? "Location (auto-detected)" : "Location"}
+                  value={item.location}
+                />
+              )}
+              {item.persons && item.persons.length > 0 && (
+                <Meta
+                  label={item.captureDetected?.includes("persons") ? "People (auto-detected)" : "People"}
+                  value={item.persons.join(", ")}
+                  className="col-span-2"
+                />
+              )}
+              {item.captureNote && (
+                <Meta label="Capture note" value={item.captureNote} className="col-span-2" />
+              )}
               {item.duration && <Meta label="Duration" value={formatDuration(item.duration)} />}
               {item.pages && <Meta label="Extent" value={`${item.pages} pages`} />}
             </dl>

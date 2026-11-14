@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -41,12 +43,55 @@ def _counts(db: Session) -> dict[str, int]:
     return counts
 
 
+def _capture_metadata(
+    *,
+    captured_date: str | None,
+    captured_time: str | None,
+    location: str | None,
+    persons: str | None,
+    note: str | None,
+) -> dict:
+    """Normalise the optional upload-time capture details supplied with a file."""
+    occurred_at: str | None = None
+    if captured_date and captured_date.strip():
+        candidate = f"{captured_date.strip()}T{(captured_time or '00:00').strip() or '00:00'}"
+        try:
+            occurred_at = datetime.fromisoformat(candidate).isoformat()
+        except ValueError:
+            occurred_at = None
+    person_names: list[str] = []
+    if persons and persons.strip():
+        text = persons.strip()
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list):
+            person_names = [str(item).strip() for item in parsed if str(item).strip()]
+        elif isinstance(parsed, str):
+            person_names = [parsed.strip()] if parsed.strip() else []
+        else:
+            person_names = [part.strip() for part in text.split(",") if part.strip()]
+    return {
+        "occurredAt": occurred_at,
+        "location": (location or "").strip() or None,
+        "persons": person_names[:20],
+        "note": (note or "").strip() or None,
+    }
+
+
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_evidence(
     request: Request,
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(default=[]),
     file: UploadFile | None = File(default=None),
+    captured_date: str | None = Form(default=None, alias="date", max_length=32),
+    captured_time: str | None = Form(default=None, alias="time", max_length=32),
+    location: str | None = Form(default=None, max_length=300),
+    persons: str | None = Form(default=None, max_length=1000),
+    note: str | None = Form(default=None, max_length=2000),
+    auto_detect: str | None = Form(default=None, alias="autoDetect", max_length=16),
     db: Session = Depends(get_db),
 ):
     uploads = [*files]
@@ -59,6 +104,14 @@ async def upload_evidence(
 
     actor = actor_name(request)
     user = file_service.get_or_create_default_user(db, actor)
+    capture = _capture_metadata(
+        captured_date=captured_date,
+        captured_time=captured_time,
+        location=location,
+        persons=persons,
+        note=note,
+    )
+    detect_missing = (auto_detect or "").strip().lower() in {"1", "true", "on", "yes"}
     items = []
     duplicates: list[DuplicateWarning] = []
     errors: list[UploadError] = []
@@ -66,7 +119,9 @@ async def upload_evidence(
     for upload in uploads:
         filename = upload.filename or "evidence"
         try:
-            stored = await file_service.store_upload(db, upload, user)
+            stored = await file_service.store_upload(
+                db, upload, user, capture=capture, auto_detect=detect_missing
+            )
         except AppError as exc:
             errors.append(UploadError(filename=filename, error=exc.message))
             record_audit(

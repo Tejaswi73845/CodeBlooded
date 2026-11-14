@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -133,6 +134,14 @@ def serialize_evidence_many(db: Session, rows: list[Evidence]) -> list[EvidenceS
     output: list[EvidenceSummary] = []
     for evidence in rows:
         meta = evidence.meta or {}
+        capture = meta.get("capture") or {}
+        occurred_at = None
+        raw_occurred = capture.get("occurredAt")
+        if raw_occurred:
+            try:
+                occurred_at = datetime.fromisoformat(str(raw_occurred).replace("Z", "+00:00"))
+            except ValueError:
+                occurred_at = None
         output.append(
             EvidenceSummary(
                 id=evidence.id,
@@ -159,6 +168,11 @@ def serialize_evidence_many(db: Session, rows: list[Evidence]) -> list[EvidenceS
                 duplicate_of=evidence.duplicate_of_id,
                 error=evidence.error_message,
                 verified_at=evidence.last_verified_at,
+                occurred_at=occurred_at,
+                location=capture.get("location"),
+                persons=list(capture.get("persons") or []),
+                capture_note=capture.get("note"),
+                capture_detected=list(capture.get("detected") or []),
             )
         )
     return output

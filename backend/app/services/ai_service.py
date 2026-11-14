@@ -48,17 +48,22 @@ class AIService:
         self.provider = settings.ai_provider
         if self.provider == "opencode":
             self.api_key = settings.opencode_api_key
-            self.base_url = settings.opencode_chat_base.rstrip("/")
+            self.model = settings.opencode_model
+            root = settings.opencode_chat_base.rstrip("/")
+            # The gateway mirrors both APIs; pick the shape from the model family.
+            self.api_style = "gemini" if self.model.startswith("gemini") else "openai"
+            self.base_url = f"{root}/google/v1beta" if self.api_style == "gemini" else f"{root}/openai/v1"
         else:
             self.api_key = settings.gemini_api_key
             self.base_url = settings.gemini_api_base.rstrip("/")
-        self.model = settings.gemini_model
+            self.model = settings.gemini_model
+            self.api_style = "gemini"
         self.embedding_model = settings.gemini_embedding_model
-        # OpenCode Go serves no embedding models, so embeddings always use the
+        # The gateway serves no embedding models, so embeddings always use the
         # Google Gemini API (or are skipped when no Google key is configured).
         self.embedding_api_key = settings.gemini_api_key
         self.embedding_base_url = settings.gemini_api_base.rstrip("/")
-        # OpenCode Go requires a stable session header per conversation plus a
+        # OpenCode expects a stable session header per conversation plus a
         # self-identifying user agent. We keep one session per process.
         self.session_id = uuid.uuid4().hex
 
@@ -154,6 +159,9 @@ class AIService:
     def _generate_url(self) -> str:
         return f"{self.base_url}/models/{self.model}:generateContent"
 
+    def _chat_completions_url(self) -> str:
+        return f"{self.base_url}/chat/completions"
+
     def _embedding_url(self) -> str:
         return f"{self.embedding_base_url}/models/{self.embedding_model}:batchEmbedContents"
 
@@ -168,6 +176,15 @@ class AIService:
         image_bytes: bytes | None = None,
         image_mime: str | None = None,
     ) -> AIResult:
+        if self.api_style == "openai":
+            return self._generate_openai(
+                prompt,
+                system=system,
+                temperature=temperature,
+                json_mode=json_mode,
+                image_bytes=image_bytes,
+                image_mime=image_mime,
+            )
         parts: list[dict[str, Any]] = [{"text": prompt}]
         if image_bytes:
             parts.append(
@@ -209,6 +226,66 @@ class AIService:
                 )
             raise AIInvalidResponse(
                 "Gemini returned an empty response.",
+                {"finishReason": finish_reason},
+            )
+        return AIResult(text=text, model=self.model, raw=payload)
+
+    def _generate_openai(
+        self,
+        prompt: str,
+        *,
+        system: str | None,
+        temperature: float,
+        json_mode: bool,
+        image_bytes: bytes | None,
+        image_mime: str | None,
+    ) -> AIResult:
+        messages: list[dict[str, Any]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        if image_bytes:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{image_mime or 'image/png'};base64,"
+                                + base64.b64encode(image_bytes).decode("ascii")
+                            },
+                        },
+                    ],
+                }
+            )
+        else:
+            messages.append({"role": "user", "content": prompt})
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": 8192,
+        }
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+
+        payload = self._post_json(self._chat_completions_url(), body)
+        choices = payload.get("choices") or []
+        if not choices:
+            raise AIInvalidResponse("The AI provider returned no answer candidates.")
+        choice = choices[0]
+        finish_reason = str(choice.get("finish_reason") or "")
+        message = choice.get("message") or {}
+        text = str(message.get("content") or "").strip()
+        if not text:
+            if finish_reason == "content_filter":
+                raise AISafetyBlocked(
+                    "The AI provider blocked this response for safety reasons.",
+                    {"finishReason": finish_reason},
+                )
+            raise AIInvalidResponse(
+                "The AI provider returned an empty response.",
                 {"finishReason": finish_reason},
             )
         return AIResult(text=text, model=self.model, raw=payload)

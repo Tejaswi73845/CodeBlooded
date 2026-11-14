@@ -6,7 +6,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.errors import AIConfigurationError, AIInvalidResponse, AIServiceUnavailable
+from app.errors import (
+    AIConfigurationError,
+    AIInvalidRequest,
+    AIInvalidResponse,
+    AISafetyBlocked,
+    AIServiceUnavailable,
+)
 from app.models import Evidence, TimelineEvent
 from app.schemas.assistant import ChatResponse, SourceRef
 from app.services import rag_service, retrieval_service
@@ -133,9 +139,9 @@ def answer_question(
 
     try:
         return _gemini_answer(question, retrieval.chunks, sources, timeline_events, retrieval)
-    except (AIServiceUnavailable, AIConfigurationError) as exc:
-        # Connectivity/availability or a rejected key degrade to verbatim evidence
-        # excerpts rather than failing the whole question.
+    except (AIServiceUnavailable, AIConfigurationError, AIInvalidRequest, AISafetyBlocked) as exc:
+        # Provider connectivity, billing/quota, model-availability or safety problems
+        # degrade to verbatim evidence excerpts rather than failing the question.
         logger.warning("AI provider unavailable; using extractive fallback: %s", exc)
         response = _extractive_answer(
             retrieval.chunks,

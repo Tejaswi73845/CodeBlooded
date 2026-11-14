@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { FileTypeTile, StatusBadge, typeMeta } from "@/components/evidence/file-type";
+import { UploadDialog } from "@/components/evidence/upload-dialog";
 import { formatBytes, formatDate, timeAgo, truncateHash } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ export function VaultPage() {
   const [sort, setSort] = useState<"newest" | "oldest" | "name" | "size">("newest");
   const [dragging, setDragging] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -97,11 +99,7 @@ export function VaultPage() {
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    uploadFiles(Array.from(files));
-    toast(
-      files.length > 1 ? `${files.length} files queued` : "File queued",
-      "Hashing and preserving the original before processing.",
-    );
+    setPendingFiles(Array.from(files));
   };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -523,6 +521,22 @@ export function VaultPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <UploadDialog
+        files={pendingFiles}
+        people={people}
+        onClose={() => setPendingFiles(null)}
+        onSubmit={(meta) => {
+          const files = pendingFiles;
+          setPendingFiles(null);
+          if (!files || files.length === 0) return;
+          uploadFiles(files, meta);
+          toast(
+            files.length > 1 ? `${files.length} files queued` : "File queued",
+            "Hashing and preserving the original before processing.",
+          );
+        }}
+      />
     </div>
   );
 }

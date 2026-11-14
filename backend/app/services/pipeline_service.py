@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ from app.models import (
     ExtractedContent,
     TimelineEvent,
 )
-from app.models.enums import AuditResult, ContentKind, EvidenceStatus, ProcessingStage
+from app.models.enums import AuditResult, ContentKind, EntityType, EvidenceStatus, ProcessingStage
 from app.services.audit_service import record_audit
 from app.services.audio_service import probe_media, transcribe_audio
 from app.services.entity_service import ExtractionResult, extract_entities_for_evidence
@@ -118,6 +119,10 @@ def _process_evidence(evidence_id: str) -> None:
         clear_timeline(db, evidence.id)
         timeline = build_timeline_for_evidence(db, evidence, contents, extraction.events)
 
+        if (evidence.meta or {}).get("captureAutoDetect") and _detect_capture(evidence, extraction):
+            db.add(evidence)
+            db.commit()
+
         set_stage(db, evidence, ProcessingStage.INTEGRITY_CHECK, 94)
         integrity = verify_evidence_integrity(db, evidence, actor="System")
 
@@ -177,6 +182,71 @@ def _process_evidence(evidence_id: str) -> None:
             logger.exception("Could not persist failure state for evidence %s", evidence_id)
     finally:
         db.close()
+
+
+def _detect_capture(evidence: Evidence, extraction: ExtractionResult) -> bool:
+    """Fill missing capture details from what extraction found in the file itself."""
+    meta = evidence.meta or {}
+    capture = dict(meta.get("capture") or {})
+    detected: list[str] = list(capture.get("detected") or [])
+    changed = False
+
+    if not capture.get("occurredAt"):
+        occurred = _detect_occurred_at(evidence, extraction)
+        if occurred:
+            capture["occurredAt"] = occurred
+            detected.append("occurredAt")
+            changed = True
+
+    if not capture.get("location"):
+        location = next(
+            (
+                entity.value.strip()
+                for entity in extraction.entities
+                if entity.type == EntityType.LOCATION and entity.value.strip()
+            ),
+            None,
+        )
+        if location:
+            capture["location"] = location
+            detected.append("location")
+            changed = True
+
+    if not capture.get("persons"):
+        persons: list[str] = []
+        for entity in extraction.entities:
+            if entity.type != EntityType.PERSON:
+                continue
+            name = entity.value.strip()
+            if name and name not in persons:
+                persons.append(name)
+        if persons:
+            capture["persons"] = persons[:5]
+            detected.append("persons")
+            changed = True
+
+    if changed:
+        evidence.meta = {
+            **meta,
+            "capture": {**capture, "detected": sorted(set(detected))},
+        }
+        logger.info("Auto-detected capture details for %s: %s", evidence.id, sorted(set(detected)))
+    return changed
+
+
+def _detect_occurred_at(evidence: Evidence, extraction: ExtractionResult) -> str | None:
+    exif = (evidence.meta or {}).get("exif") or {}
+    raw_exif = exif.get("36867") or exif.get("306")
+    if raw_exif:
+        for fmt in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+            try:
+                return datetime.strptime(str(raw_exif), fmt).isoformat()
+            except ValueError:
+                continue
+    dated = [event.occurred_at for event in extraction.events if event.occurred_at]
+    if dated:
+        return min(dated).isoformat()
+    return None
 
 
 def reset_derived(db: Session, evidence_id: uuid.UUID) -> None:

@@ -38,6 +38,11 @@ export interface EvidenceItem {
   preview?: string;
   url?: string;
   integrity: "verified" | "pending" | "mismatch";
+  occurredAt?: string;
+  location?: string;
+  persons?: string[];
+  captureNote?: string;
+  captureDetected?: string[];
 }
 
 export type EventCategory = "Communication" | "Financial" | "Physical" | "Digital" | "Legal";

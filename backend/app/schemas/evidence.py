@@ -68,6 +68,12 @@ class EvidenceSummary(APIModel):
     duplicate_of: uuid.UUID | None = None
     error: str | None = None
     verified_at: datetime | None = None
+    # Capture metadata recorded by the analyst at upload time.
+    occurred_at: datetime | None = None
+    location: str | None = None
+    persons: list[str] = Field(default_factory=list)
+    capture_note: str | None = None
+    capture_detected: list[str] = Field(default_factory=list)
 
 
 class DuplicateWarning(APIModel):

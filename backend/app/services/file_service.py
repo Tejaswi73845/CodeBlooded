@@ -7,6 +7,7 @@ import stat
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from fastapi import UploadFile
 from sqlalchemy import select
@@ -62,7 +63,14 @@ def evidence_reference() -> str:
     return f"TV-{utcnow().year}-{uuid.uuid4().hex[:6].upper()}"
 
 
-async def store_upload(db: Session, upload: UploadFile, user: User) -> StoredUpload:
+async def store_upload(
+    db: Session,
+    upload: UploadFile,
+    user: User,
+    *,
+    capture: dict[str, Any] | None = None,
+    auto_detect: bool = False,
+) -> StoredUpload:
     original_name = upload.filename or "evidence"
     clean_name = safe_filename(original_name)
     try:
@@ -123,14 +131,27 @@ async def store_upload(db: Session, upload: UploadFile, user: User) -> StoredUpl
             except OSError:  # pragma: no cover - Windows locks/permissions
                 logger.warning("Could not mark original read-only: %s", destination)
 
+        capture_data = {key: value for key, value in (capture or {}).items() if value}
         meta = {
             "extension": extension_of(clean_name),
             "declared_content_type": upload.content_type,
             "sha256": sha256,
             "phash": phash,
             "source": "Upload",
-            "tags": ["new intake"],
+            "tags": list(
+                dict.fromkeys(
+                    [
+                        "new intake",
+                        *([capture_data["location"]] if capture_data.get("location") else []),
+                        *(capture_data.get("persons") or []),
+                    ]
+                )
+            )[:6],
         }
+        if capture_data:
+            meta["capture"] = capture_data
+        if auto_detect:
+            meta["captureAutoDetect"] = True
         evidence = Evidence(
             id=evidence_id,
             reference=evidence_reference(),
@@ -149,7 +170,7 @@ async def store_upload(db: Session, upload: UploadFile, user: User) -> StoredUpl
             integrity_status=IntegrityStatus.PENDING,
             duplicate_of_id=exact.id if exact else None,
             uploaded_by_id=user.id,
-            note="Queued for extraction.",
+            note=capture_data.get("note") or "Queued for extraction.",
             meta=meta,
             uploaded_at=utcnow(),
         )

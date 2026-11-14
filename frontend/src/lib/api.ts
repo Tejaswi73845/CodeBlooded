@@ -11,6 +11,17 @@ export interface UploadResult {
   hash: string;
 }
 
+/** Analyst-supplied capture details recorded when evidence is added. */
+export interface UploadMeta {
+  date?: string; // YYYY-MM-DD
+  time?: string; // HH:MM
+  location?: string;
+  persons?: string[];
+  note?: string;
+  /** Let the backend fill blank fields from the file's own content. */
+  autoDetect?: boolean;
+}
+
 export interface EvidenceStatusResult {
   status: string;
   stage: string;
@@ -40,6 +51,11 @@ interface BackendEvidence {
   note?: string | null;
   preview?: string | null;
   error?: string | null;
+  occurredAt?: string | null;
+  location?: string | null;
+  persons?: string[];
+  captureNote?: string | null;
+  captureDetected?: string[];
 }
 
 const STATUS_MAP: Record<string, EvidenceItem["status"]> = {
@@ -76,6 +92,11 @@ function toEvidenceItem(item: BackendEvidence): EvidenceItem {
     note: item.note ?? undefined,
     preview: item.preview ?? undefined,
     integrity: item.integrity === "verified" ? "verified" : item.integrity === "mismatch" ? "mismatch" : "pending",
+    occurredAt: item.occurredAt ?? undefined,
+    location: item.location ?? undefined,
+    persons: item.persons ?? [],
+    captureNote: item.captureNote ?? undefined,
+    captureDetected: item.captureDetected ?? [],
   };
 }
 
@@ -140,10 +161,16 @@ export const api = {
     await sleep(60);
     return pipeline;
   },
-  /** Preserve an uploaded file on the backend, returning its id and content hash. */
-  async upload(file: File): Promise<UploadResult> {
+  /** Preserve an uploaded file on the backend with optional capture metadata. */
+  async upload(file: File, meta?: UploadMeta): Promise<UploadResult> {
     const form = new FormData();
     form.append("files", file);
+    if (meta?.date) form.append("date", meta.date);
+    if (meta?.time) form.append("time", meta.time);
+    if (meta?.location) form.append("location", meta.location);
+    if (meta?.persons?.length) form.append("persons", JSON.stringify(meta.persons));
+    if (meta?.note) form.append("note", meta.note);
+    if (meta?.autoDetect !== undefined) form.append("autoDetect", meta.autoDetect ? "true" : "false");
     const response = await fetch(`${API_BASE}/api/evidence/upload`, { method: "POST", body: form });
     if (!response.ok) {
       const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
@@ -153,6 +180,12 @@ export const api = {
     const item = payload.items?.[0];
     if (!item) throw new Error("The server did not preserve this file.");
     return { id: item.id, hash: item.hash };
+  },
+  /** Fetch one evidence item (to pick up auto-detected capture details). */
+  async evidence(id: string): Promise<EvidenceItem> {
+    const response = await fetch(`${API_BASE}/api/evidence/${id}`);
+    if (!response.ok) throw new Error(`Evidence request failed (HTTP ${response.status})`);
+    return toEvidenceItem((await response.json()) as BackendEvidence);
   },
   /** Processing status for a preserved evidence item. */
   async evidenceStatus(id: string): Promise<EvidenceStatusResult> {
