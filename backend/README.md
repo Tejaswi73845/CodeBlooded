@@ -242,6 +242,7 @@ Base URL: `http://127.0.0.1:8000/api`
 | GET | `/evidence` | Search/filter (`q`, `type`, `status`, `personId`, `sort`, pagination) |
 | GET | `/evidence/{id}` | Metadata, extracted content, entities, events, capture details, duplicates |
 | GET | `/evidence/{id}/status` | Live processing progress |
+| GET | `/evidence/{id}/summary` | Grounded summary of one item (cached by content hash; `?refresh=true` regenerates) |
 | GET | `/evidence/{id}/download` | Original file; logs access; exposes `X-Evidence-SHA256` |
 | PATCH | `/evidence/{id}/capture` | Correct date/time/location/people/note; re-syncs entities + timeline |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256, update integrity, audit |

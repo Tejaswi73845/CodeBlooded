@@ -237,6 +237,7 @@ Base URL: `http://127.0.0.1:8000/api` — full reference in [backend/README.md](
 | GET | `/evidence` | List/search/filter evidence |
 | GET | `/evidence/{id}` | Detail: extracted content, entities, events, capture, duplicates |
 | GET | `/evidence/{id}/status` | Processing progress/stage |
+| GET | `/evidence/{id}/summary` | AI summary of one item (cached; `?refresh=true` to regenerate) |
 | GET | `/evidence/{id}/download` | Download original (audited) |
 | PATCH | `/evidence/{id}/capture` | Correct capture details; re-sync graph + timeline |
 | POST | `/evidence/{id}/verify` | Recompute SHA-256 |

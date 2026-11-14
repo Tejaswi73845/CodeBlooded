@@ -93,6 +93,17 @@ class CaptureUpdate(APIModel):
     note: str | None = Field(default=None, max_length=2000)
 
 
+class EvidenceAiSummary(APIModel):
+    evidence_id: uuid.UUID
+    evidence_name: str
+    summary: str
+    mode: str = "ai"
+    model: str | None = None
+    cached: bool = False
+    generated_at: datetime
+    limitations: list[str] = Field(default_factory=list)
+
+
 class UploadError(APIModel):
     filename: str
     error: str

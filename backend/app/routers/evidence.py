@@ -17,6 +17,7 @@ from app.models.enums import AuditResult, EvidenceStatus, ProcessingStage
 from app.schemas.evidence import (
     CaptureUpdate,
     DuplicateWarning,
+    EvidenceAiSummary,
     EvidenceDetail,
     EvidencePage,
     EvidenceSummary,
@@ -24,7 +25,7 @@ from app.schemas.evidence import (
     UploadError,
     UploadResponse,
 )
-from app.services import evidence_service, file_service
+from app.services import evidence_service, file_service, summary_service
 from app.services.audit_service import record_audit
 from app.services.capture_service import sync_capture
 from app.services.integrity_service import verify_evidence_integrity
@@ -223,6 +224,18 @@ def get_evidence(
         workspace_id=workspace.id,
     )
     return detail
+
+
+@router.get("/{evidence_id}/summary", response_model=EvidenceAiSummary)
+def evidence_summary(
+    evidence_id: uuid.UUID,
+    refresh: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+):
+    """Grounded summary of one evidence item (cached until its text changes)."""
+    evidence = _scoped_evidence(db, evidence_id, workspace)
+    return summary_service.summarize(db, evidence, refresh=refresh)
 
 
 @router.get("/{evidence_id}/status", response_model=StatusResponse)

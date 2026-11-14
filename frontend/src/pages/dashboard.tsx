@@ -7,14 +7,16 @@ import {
   FileStack,
   Link2,
   Plus,
+  RefreshCw,
   ScanLine,
   ShieldAlert,
   Sparkles,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { useApp } from "@/store/app-store";
+import { api, type EvidenceAiSummary } from "@/lib/api";
 import type { Insight, PipelineStage } from "@/data/types";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -36,8 +38,51 @@ const kindMeta = {
 };
 
 export function DashboardPage() {
-  const { evidence, people, events, insights, navigate, openEvidence, selectPerson, ask, workspace } = useApp();
+  const { evidence, people, events, insights, navigate, openEvidence, selectPerson, ask, workspace, activeWorkspaceId } = useApp();
   const [activeInsight, setActiveInsight] = useState<Insight | null>(null);
+  const [summary, setSummary] = useState<EvidenceAiSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  const latestEvidence = useMemo(
+    () => [...evidence].sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))[0],
+    [evidence],
+  );
+  const latestId = latestEvidence?.id;
+
+  useEffect(() => {
+    if (!latestId) {
+      setSummary(null);
+      return;
+    }
+    let cancelled = false;
+    setSummaryLoading(true);
+    void api
+      .evidenceSummary(latestId)
+      .then((result) => {
+        if (!cancelled) setSummary(result);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [latestId, activeWorkspaceId]);
+
+  const refreshSummary = async () => {
+    if (!latestId) return;
+    setSummaryLoading(true);
+    try {
+      setSummary(await api.evidenceSummary(latestId, true));
+    } catch {
+      // keep the previous summary on failure
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   const recentEvidence = useMemo(
     () => [...evidence].sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt)).slice(0, 5),
@@ -228,16 +273,57 @@ export function DashboardPage() {
           <CardHeader>
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-accent" />
-              <CardTitle>AI insights</CardTitle>
+              <CardTitle>{insights.length ? "AI insights" : "Latest evidence"}</CardTitle>
             </div>
-            <Badge tone="accent">{insights.filter((i) => !i.reviewed).length} new</Badge>
+            <Badge tone="accent">
+              {insights.length
+                ? `${insights.filter((i) => !i.reviewed).length} new`
+                : summary?.mode === "ai"
+                  ? "AI summary"
+                  : "Summary"}
+            </Badge>
           </CardHeader>
           <CardContent className="mt-2 space-y-1 px-2 pb-2">
-            {insights.length === 0 && (
-              <p className="px-3 py-6 text-center text-[11.5px] leading-relaxed text-ink-3">
-                Insights appear here once evidence has been preserved and reviewed.
-              </p>
-            )}
+            {insights.length === 0 &&
+              (latestEvidence ? (
+                <div className="px-2 pb-1">
+                  <div className="flex items-center gap-2">
+                    <FileTypeTile type={latestEvidence.type} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-medium">{latestEvidence.name}</p>
+                      <p className="text-[10px] text-ink-3">
+                        {timeAgo(latestEvidence.uploadedAt)} · newest upload
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 max-h-40 overflow-y-auto rounded-lg bg-surface-2 p-2.5 text-[11.5px] leading-relaxed text-ink-2">
+                    {summaryLoading
+                      ? "Summarising evidence…"
+                      : summary?.summary ?? "No summary is available for this item yet."}
+                  </div>
+                  {summary?.limitations && summary.limitations.length > 0 && (
+                    <p className="mt-1 line-clamp-2 text-[10px] text-ink-3">{summary.limitations[0]}</p>
+                  )}
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      onClick={() => openEvidence(latestEvidence.id)}
+                      className="text-[11px] font-medium text-accent hover:underline"
+                    >
+                      Open evidence
+                    </button>
+                    <button
+                      onClick={() => void refreshSummary()}
+                      className="flex items-center gap-1 text-[10.5px] text-ink-3 transition-colors hover:text-ink"
+                    >
+                      <RefreshCw className={cn("h-3 w-3", summaryLoading && "animate-spin")} /> Refresh
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="px-3 py-6 text-center text-[11.5px] leading-relaxed text-ink-3">
+                  Upload evidence to see an AI summary of your newest file here.
+                </p>
+              ))}
             {insights.slice(0, 3).map((insight) => {
               const meta = kindMeta[insight.kind];
               return (
@@ -271,12 +357,14 @@ export function DashboardPage() {
                 </button>
               );
             })}
-            <button
-              onClick={() => navigate("assistant")}
-              className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg py-2 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent-soft"
-            >
-              Investigate with AI <ArrowUpRight className="h-3 w-3" />
-            </button>
+            {insights.length > 0 && (
+              <button
+                onClick={() => navigate("assistant")}
+                className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg py-2 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent-soft"
+              >
+                Investigate with AI <ArrowUpRight className="h-3 w-3" />
+              </button>
+            )}
           </CardContent>
         </Card>
 

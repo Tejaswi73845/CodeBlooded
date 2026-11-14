@@ -89,7 +89,7 @@ src/
 
 ### Dashboard
 
-Real counts, a 7-day intake chart computed from upload dates, processing pipeline derived from evidence statuses, recent evidence/events and an empty state for insights until data exists.
+Real counts, a 7-day intake chart computed from upload dates, processing pipeline derived from evidence statuses, recent evidence/events, and a **summary of the newest uploaded evidence** (AI-generated, with an extractive fallback) with Open/Refresh actions.
 
 ### Timeline
 

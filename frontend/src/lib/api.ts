@@ -223,6 +223,17 @@ export interface AuthResult {
   user: AuthUser;
 }
 
+export interface EvidenceAiSummary {
+  evidenceId: string;
+  evidenceName: string;
+  summary: string;
+  mode: string;
+  model?: string | null;
+  cached: boolean;
+  generatedAt: string;
+  limitations: string[];
+}
+
 export const api = {
   async login(email: string, password: string): Promise<AuthResult> {
     const response = await request("/api/auth/login", {
@@ -303,6 +314,15 @@ export const api = {
       // Backend unreachable: show an empty vault rather than fabricated data.
       return [];
     }
+  },
+  /** Grounded summary of one evidence item. */
+  async evidenceSummary(id: string, refresh = false): Promise<EvidenceAiSummary> {
+    const response = await request(`/api/evidence/${id}/summary${refresh ? "?refresh=true" : ""}`);
+    if (!response.ok) {
+      const payload: { error?: { message?: string } } | null = await response.json().catch(() => null);
+      throw new Error(payload?.error?.message ?? `Summary failed (HTTP ${response.status})`);
+    }
+    return (await response.json()) as EvidenceAiSummary;
   },
   /** Preserve an uploaded file on the backend with optional capture metadata. */
   async upload(file: File, meta?: UploadMeta): Promise<UploadResult> {
