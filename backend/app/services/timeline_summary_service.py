@@ -10,6 +10,7 @@ from app.models import Evidence, TimelineEvent
 from app.schemas.timeline import TimelineSummaryItem
 from app.services.ai_service import ai_service
 from app.utils.logging import get_logger
+from app.utils.narrative import sanitize_summary
 from app.utils.text import truncate
 from app.utils.time import utcnow
 
@@ -17,9 +18,13 @@ logger = get_logger(__name__)
 
 SYSTEM_PROMPT = (
     "You summarise reconstructed timeline events for a forensic investigator. "
-    "Use only the supplied event fields. For each event id, write ONE factual sentence "
-    "(max 35 words) describing what happened, including names, amounts, places and times "
-    "when present. Never invent facts. Return a JSON object mapping each id string to its sentence."
+    "Each event card already displays its own date, time and location, so do not repeat them "
+    "unless the source states them verbatim and they are essential to the meaning. "
+    "For each event id write ONE factual sentence (max 30 words) about who did what, to whom, "
+    "and why it matters: the request, demand, payment, threat or decision. "
+    "Describe the substance, not the file type, and never transcribe email headers, "
+    "Message-IDs, IP addresses or angle-bracket addresses. "
+    "Never invent facts. Return a JSON object mapping each id string to its sentence."
 )
 
 
@@ -138,7 +143,12 @@ def _summarize_group(
         return {}, "extractive"
 
     cleaned: dict[str, str] = {}
+    by_id = {str(event.id): event for event in events}
     for key, value in result.items():
         if isinstance(value, str) and value.strip():
-            cleaned[str(key)] = value.strip()
+            event = by_id.get(str(key))
+            summary = value.strip()
+            if event is not None:
+                summary = sanitize_summary(summary, event.occurred_at_raw)
+            cleaned[str(key)] = summary or value.strip()
     return cleaned, "ai"

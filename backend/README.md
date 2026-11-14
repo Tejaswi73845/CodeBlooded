@@ -224,6 +224,8 @@ Timeline events keep:
 
 Uncertainty is never silently upgraded to a precise timestamp.
 
+Event titles are short human labels (`who did what`). Email envelope lines (`From:`/`To:`/`Date:`/`Subject:`/`Message-ID:`/`X-*`) are treated as metadata: a header block becomes `Email from <sender> to <recipient>: <subject>` instead of being copied verbatim, and angle-bracket addresses are stripped from titles. AI card summaries do not restate the date, time or location already shown on the card unless the source states it verbatim; header syntax, Message-IDs, IP addresses and angle-bracket addresses are never quoted. `scripts/sanitize_timeline.py` rewrites older rows and clears stale cached summaries.
+
 ## API
 
 Base URL: `http://127.0.0.1:8000/api`

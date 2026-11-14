@@ -10,6 +10,12 @@ from app.models import Entity, EventEntity, Evidence, EvidenceEntity, ExtractedC
 from app.models.enums import ContentKind, EntityType, EventCategory
 from app.services.entity_service import EventCandidate
 from app.services.severity import classify_severity
+from app.utils.email_headers import (
+    header_event_description,
+    header_event_title,
+    is_header_block,
+    sanitize_event_title,
+)
 from app.utils.logging import get_logger
 from app.utils.text import clean_text, split_sentences, truncate
 from app.utils.time import find_date_expressions, parse_event_datetime
@@ -40,6 +46,17 @@ def build_timeline_for_evidence(
             continue
         if supplemental.date_raw and supplemental.date_raw.strip().lower() in covered_raw:
             continue
+        if supplemental.source == "regex_email_header" and supplemental.occurred_at is not None:
+            # Header-derived events only carry the message timestamp; skip them when the
+            # primary extraction already described the same communication.
+            minute = supplemental.occurred_at.replace(second=0, microsecond=0)
+            if any(
+                event.occurred_at is not None
+                and event.occurred_at.replace(second=0, microsecond=0) == minute
+                and event.category == EventCategory.COMMUNICATION
+                for event in candidates
+            ):
+                continue
         candidates.append(supplemental)
         if supplemental.occurred_at is not None:
             covered_times.add(supplemental.occurred_at)
@@ -55,6 +72,7 @@ def build_timeline_for_evidence(
     created = 0
     uncertain = 0
     for candidate in candidates[:60]:
+        candidate.title = sanitize_event_title(candidate.title, 160)
         if not candidate.title.strip():
             continue
         pair = (candidate.date_raw, (candidate.excerpt or "").strip().lower()[:100])
@@ -119,6 +137,31 @@ def _supplemental_events(contents: list[ExtractedContent]) -> list[EventCandidat
                 continue
             raw = dates[0]
             occurred_at, uncertain = parse_event_datetime(raw)
+
+            if is_header_block(sentence):
+                # The header block is metadata, not an event. Keep its date (the time the
+                # message was sent) but label it with the sender, recipient and subject.
+                title = header_event_title(sentence)
+                description = header_event_description(sentence)
+                candidates.append(
+                    EventCandidate(
+                        title=truncate(title, 140),
+                        description=truncate(description or title, 900),
+                        date_raw=raw,
+                        occurred_at=occurred_at,
+                        time_uncertain=uncertain,
+                        category=EventCategory.COMMUNICATION,
+                        confidence=0.6 if uncertain else 0.7,
+                        excerpt=truncate(sentence, 500),
+                        page_number=content.page_number,
+                        timestamp_start=content.timestamp_start,
+                        source="regex_email_header",
+                    )
+                )
+                if len(candidates) >= 40:
+                    break
+                continue
+
             title = sentence
             for found in dates:
                 title = title.replace(found, " ")

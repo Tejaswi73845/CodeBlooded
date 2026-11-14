@@ -6,12 +6,12 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.errors import AIServiceError
 from app.models import Evidence, ExtractedContent, TimelineEvent, Workspace
 from app.schemas.report import CaseAnalysisOut, CaseTypeOut, UnrelatedEvidenceOut
 from app.services.ai_service import ai_service
 from app.utils.logging import get_logger
+from app.utils.narrative import strip_header_syntax
 from app.utils.text import truncate
 from app.utils.time import utcnow
 
@@ -22,6 +22,8 @@ SYSTEM_PROMPT = (
     "write a detailed investigator summary, and flag evidence that is unrelated to the case. "
     "Allowed case-type labels: Fraud, Harassment, Assault, Sexual assault, Threats & extortion, "
     "Cybercrime, Theft, Defamation, Other. Never invent facts. "
+    "Refer to dates in plain prose (this report stands alone), but never quote Message-IDs, "
+    "IP addresses, angle-bracket email addresses or raw email header syntax. "
     "Return JSON: {\"caseTypes\":[{\"label\":\"Fraud\",\"confidence\":0.0-1.0}], "
     "\"summary\":\"6-10 factual sentences covering the key people, dates, amounts and events\", "
     "\"unrelated\":[{\"name\":\"exact file name\",\"reason\":\"why it is out of scope\"}]}."
@@ -121,7 +123,7 @@ def analyze_case(db: Session, workspace: Workspace, *, refresh: bool = False) ->
                 temperature=0.1,
             )
             ai_types = _parse_types(payload)
-            ai_summary = str(payload.get("summary") or "").strip()
+            ai_summary = strip_header_syntax(str(payload.get("summary") or ""))
             ai_unrelated = _parse_unrelated(payload, rows)
             if ai_types:
                 labels = ai_types

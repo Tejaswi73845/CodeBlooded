@@ -10,7 +10,9 @@ from app.errors import AIServiceError
 from app.models import Evidence
 from app.schemas.evidence import EvidenceAiSummary
 from app.services.ai_service import ai_service
+from app.utils.email_headers import header_digest, is_header_block, strip_header_block
 from app.utils.logging import get_logger
+from app.utils.narrative import sanitize_summary
 from app.utils.text import truncate
 from app.utils.time import utcnow
 
@@ -18,9 +20,14 @@ logger = get_logger(__name__)
 
 SYSTEM_PROMPT = (
     "You summarise digital evidence for a forensic investigator. "
-    "Use only the supplied file text. Never invent names, dates, amounts or events. "
-    "Be factual and concise: 3–4 sentences, mentioning the key people, times, places and amounts "
-    "that actually appear. If the text is unreadable or empty, say so."
+    "Use only the supplied text; never invent names, dates, amounts or events. "
+    "Write 3-4 factual sentences about the substance: who is involved and what was said, "
+    "requested, promised, threatened or paid, including amounts and deadlines that appear. "
+    "The interface already shows the capture date, time and location, so do not repeat them "
+    "unless the text states them verbatim and they are essential. "
+    "Ignore email envelope syntax: never quote header fields, Message-IDs, IP addresses, "
+    "angle-bracket addresses or the file name. "
+    "If the text is unreadable or empty, say so."
 )
 
 
@@ -51,13 +58,20 @@ def summarize(db: Session, evidence: Evidence, *, refresh: bool = False) -> Evid
         summary = _metadata_summary(evidence, capture)
     elif ai_service.configured:
         try:
+            digest = ""
+            body = text
+            if is_header_block(text[:800]):
+                digest = header_digest(text)
+                body = strip_header_block(text) or text
             prompt = (
                 f"FILE: {evidence.original_filename}\n"
                 f"TYPE: {evidence.file_type.value}\n\n"
-                f"TEXT:\n{truncate(text, settings.max_text_chars_for_ai)}"
             )
+            if digest:
+                prompt += f"METADATA (not message content):\n{digest}\n\nMESSAGE BODY:\n"
+            prompt += truncate(body, settings.max_text_chars_for_ai)
             result = ai_service.generate(prompt, system=SYSTEM_PROMPT, temperature=0.1)
-            summary = result.text.strip()
+            summary = sanitize_summary(result.text.strip())
             mode = "ai"
             model = result.model
         except AIServiceError as exc:
@@ -108,6 +122,8 @@ def _from_cache(evidence: Evidence, cached: dict) -> EvidenceAiSummary:
 
 
 def _extractive_summary(text: str) -> str:
+    if is_header_block(text[:800]):
+        text = strip_header_block(text) or header_digest(text)
     cleaned = re.sub(r"\s+", " ", text).strip()
     return truncate(cleaned, 700)
 

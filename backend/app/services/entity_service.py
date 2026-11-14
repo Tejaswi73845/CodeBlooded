@@ -12,6 +12,11 @@ from sqlalchemy.orm import Session
 from app.models import Entity, EntityRelationship, Evidence, EvidenceEntity, ExtractedContent
 from app.models.enums import EntityType, EventCategory
 from app.services.ai_service import ai_service
+from app.utils.email_headers import (
+    header_event_description,
+    is_header_block,
+    sanitize_event_title,
+)
 from app.utils.logging import get_logger
 from app.utils.text import clean_text, excerpt_around, split_sentences, truncate
 from app.utils.time import find_date_expressions, parse_event_datetime
@@ -84,6 +89,11 @@ Every entity and event MUST include a short verbatim excerpt copied from the tex
 Preserve uncertainty: confidence must reflect how clearly the item is stated.
 Dates must be copied exactly as written (date_raw) and may be partial.
 Categories are Communication, Financial, Physical, Digital, Legal, Other.
+Email envelope lines (From:, To:, Cc:, Date:, Subject:, Message-ID:, X-*, Attachments:) are
+metadata: use them only to identify sender, recipient and subject. Never copy a header line or an
+address in angle brackets into a value, title or description.
+Titles are short human labels in the form "<who> <did what>" (max 12 words). Never put dates,
+times, locations, file names, Message-IDs or IP addresses in a title.
 Return JSON only, no markdown, with this shape:
 {
   "entities": [
@@ -91,7 +101,8 @@ Return JSON only, no markdown, with this shape:
      "value": "verbatim value", "confidence": 0.0-1.0, "excerpt": "verbatim source snippet"}
   ],
   "events": [
-    {"title": "short factual label", "description": "one sentence from the source",
+    {"title": "short factual label, e.g. 'Karan Malhotra sent the client agreement'",
+     "description": "one sentence from the source",
      "date_raw": "date/time as written or null", "category": "Communication|Financial|Physical|Digital|Legal|Other",
      "confidence": 0.0-1.0, "excerpt": "verbatim source snippet"}
   ]
@@ -249,7 +260,7 @@ def _extract_with_gemini(contents: list[ExtractedContent]) -> ExtractionResult:
     for raw in payload.get("events", [])[:120]:
         if not isinstance(raw, dict):
             continue
-        title = clean_text(str(raw.get("title", "")))
+        title = sanitize_event_title(clean_text(str(raw.get("title", ""))))
         excerpt = clean_text(str(raw.get("excerpt", "")))
         if not title or not excerpt:
             continue
@@ -378,10 +389,14 @@ def _extract_fallback(contents: list[ExtractedContent]) -> ExtractionResult:
                 continue
             raw_date = dates[0]
             occurred_at, uncertain = parse_event_datetime(raw_date)
+            title = sanitize_event_title(sentence)
+            if not title:
+                continue
+            description = header_event_description(sentence) if is_header_block(sentence) else sentence
             result.events.append(
                 EventCandidate(
-                    title=truncate(sentence, 110),
-                    description=truncate(sentence, 700),
+                    title=truncate(title, 110),
+                    description=truncate(description, 700),
                     date_raw=raw_date,
                     occurred_at=occurred_at,
                     time_uncertain=uncertain,
